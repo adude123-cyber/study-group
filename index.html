@@ -141,7 +141,19 @@ button.chip:hover { border-color: var(--ink); }
 .dropdown hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 .dropdown .pad { padding: 6px 10px; display: grid; gap: 8px; }
 
-.cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr) 270px; gap: 28px; padding-block: 18px 0; }
+.cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 32px; padding-block: 18px 0; }
+.sidecol { align-items: center; gap: 36px; padding-top: 12px; }
+.sidecol > * { width: 100%; max-width: 760px; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; padding-top: 24px; border-top: 1px solid var(--line); }
+@media (max-width: 700px) { .split { grid-template-columns: minmax(0, 1fr); } }
+.timerchip { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (min-width: 921px) {
+  .room[data-page="room"] .sidecol { display: none; }
+  .room[data-page="timer"] .taskcol, .room[data-page="timer"] .feedcol { display: none; }
+  .room[data-page="timer"] .cols { grid-template-columns: minmax(0, 1fr); }
+  .room[data-page="timer"] .ring { width: 250px; height: 250px; }
+  .room[data-page="timer"] .ring .clock { font-size: 56px; }
+}
 .col { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; padding-bottom: 18px; }
 .col.feedcol { overflow: hidden; padding-bottom: 0; }
 .section { display: grid; gap: 8px; }
@@ -330,12 +342,16 @@ input[type=range] { width: 100%; accent-color: var(--ink); }
     </div>
   </section>
 
-  <section class="room" id="v-room" data-tab="feed" hidden>
+  <section class="room" id="v-room" data-tab="feed" data-page="room" hidden>
     <header class="topbar">
       <h1 id="roomTitle">room</h1>
       <button class="codechip" id="copyCode" title="Copy invite" type="button"><span id="roomCode">------</span></button>
       <button class="btn sm ghost hide-sm" id="inviteBtn" type="button">invite</button>
+      <div class="seg hide-sm" role="group" aria-label="Room pages" id="pageSeg">
+        <button type="button" data-page="room" aria-pressed="true">room</button><button type="button" data-page="timer" aria-pressed="false">timer &amp; stats</button>
+      </div>
       <span class="spacer"></span>
+      <button class="btn sm ghost timerchip" id="timerChip" type="button" hidden></button>
       <span class="avstack hide-sm" id="onlineStack"></span>
       <span class="streak hide-sm" id="groupStreak"></span>
       <div class="dropwrap">
@@ -406,26 +422,31 @@ input[type=range] { width: 100%; accent-color: var(--ink); }
           <p class="muted" style="font-size:12px" id="timerNote">Everyone in the room shares this timer.</p>
         </div>
 
-        <div class="seg" aria-label="Stats view" id="sideSeg" style="align-self:center">
-          <button type="button" data-pane="you" aria-pressed="true">you</button><button type="button" data-pane="group" aria-pressed="false">group</button>
+        <div class="split">
+          <section class="section" aria-label="Your stats">
+            <div class="section-h"><h3>you</h3><span class="label">today</span></div>
+            <div id="paneYou" class="stack" style="gap:16px">
+              <div class="statgrid">
+                <div class="stat"><b id="stDone">0</b><span>done today</span></div>
+                <div class="stat"><b id="stMin">0</b><span>focus min</span></div>
+                <div class="stat"><b id="stStreak">0</b><span>day streak</span></div>
+              </div>
+              <div class="badges" id="badgeRow"></div>
+              <div class="row"><button class="btn sm" type="button" data-open="recap">weekly recap</button><button class="btn sm" type="button" data-open="cards">flashcards</button></div>
+            </div>
+          </section>
+          <section class="section" aria-label="Group">
+            <div class="section-h"><h3>group</h3><span class="label">today</span></div>
+            <div id="paneGroup" class="people"></div>
+          </section>
         </div>
-        <div id="paneYou" class="stack" style="gap:16px">
-          <div class="statgrid">
-            <div class="stat"><b id="stDone">0</b><span>done today</span></div>
-            <div class="stat"><b id="stMin">0</b><span>focus min</span></div>
-            <div class="stat"><b id="stStreak">0</b><span>day streak</span></div>
-          </div>
-          <div class="badges" id="badgeRow" style="justify-content:center"></div>
-          <div class="row" style="justify-content:center"><button class="btn sm" type="button" data-open="recap">weekly recap</button><button class="btn sm" type="button" data-open="cards">flashcards</button></div>
-        </div>
-        <div id="paneGroup" class="people" hidden></div>
       </aside>
     </div>
 
     <nav class="tabs" role="tablist" aria-label="Room sections">
       <button role="tab" data-tab="tasks" aria-selected="false" type="button">tasks</button>
       <button role="tab" data-tab="feed" aria-selected="true" type="button">feed</button>
-      <button role="tab" data-tab="timer" aria-selected="false" type="button">timer</button>
+      <button role="tab" data-tab="timer" aria-selected="false" type="button">timer &amp; stats</button>
     </nav>
   </section>
 </div>
@@ -1041,6 +1062,9 @@ function renderTimer() {
   const labels = { focus: ['FOCUS', 'heads down'], break: ['BREAK', breakIdea], idle: ['ROOM TIMER', 'ready when you are'] };
   const [p, sub] = st.phase === 'over' ? [st.was === 'focus' ? 'NICE WORK' : 'BREAK OVER', st.was === 'focus' ? 'take a break?' : 'ready for another?'] : labels[st.phase];
   $('phaseTag').textContent = p; $('clockSub').textContent = sub;
+  const running = st.phase === 'focus' || st.phase === 'break';
+  $('timerChip').hidden = !running || $('v-room').dataset.page === 'timer';
+  if (running) { $('timerChip').textContent = (st.phase === 'focus' ? 'focus ' : 'break ') + fmt(st.left); $('timerChip').title = 'Open the timer page'; }
   $('timerNote').textContent = st.phase === 'focus' && st.by ? `Started by ${st.by}.${settings().quietFocus ? ' Posts are paused.' : ''}` : 'Everyone in the room shares this timer.';
   $('quizBtn').hidden = !(st.phase === 'break' || (st.phase === 'over' && st.was === 'focus'));
   if (st.phase === 'over') creditFocus(st);
@@ -1145,12 +1169,6 @@ function renderSide() {
       h('div', { class: 'score' }, h('div', { text: r.done + ' done' }), h('div', { text: r.mins + ' min' }))));
   }
 }
-$('sideSeg').addEventListener('click', (e) => {
-  const b = e.target.closest('button[data-pane]'); if (!b) return;
-  S.sidePane = b.dataset.pane;
-  $('sideSeg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
-  $('paneYou').hidden = S.sidePane !== 'you'; $('paneGroup').hidden = S.sidePane !== 'group';
-});
 function markStudyDay() { const d = ls.get('sg-days', []); if (!d.includes(today())) { d.push(today()); ls.set('sg-days', d.slice(-120)); } renderSide(); }
 function streak() {
   const d = new Set(ls.get('sg-days', []));
@@ -1161,9 +1179,15 @@ function streak() {
 }
 function renderAll() { renderHeader(); renderGoal(); renderTasks(); renderFeed(); renderTimer(); renderSide(); renderQuota(); }
 function setTab(tab) {
-  $('v-room').dataset.tab = tab;
+  const room = $('v-room');
+  room.dataset.tab = tab;
+  room.dataset.page = tab === 'timer' ? 'timer' : 'room';
   document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === tab)));
+  document.querySelectorAll('#pageSeg button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.page === room.dataset.page)));
+  renderTimer();
 }
+$('pageSeg').addEventListener('click', (e) => { const b = e.target.closest('button[data-page]'); if (b) setTab(b.dataset.page === 'timer' ? 'timer' : 'feed'); });
+$('timerChip').addEventListener('click', () => setTab('timer'));
 document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
 
 // ---------- panels ----------
