@@ -1,0 +1,1511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Study Group</title>
+<meta name="description" content="A quiet, minimal study room for getting homework done with friends. Share a 6-character code, track tasks together and focus on a shared timer. No account needed.">
+<meta name="theme-color" content="#E9E4F7">
+<meta property="og:title" content="Study Group">
+<meta property="og:description" content="A quiet study room for getting homework done with friends. No account needed.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23DCD2F5'/%3E%3Cpath d='M9 17l5 5 9-11' fill='none' stroke='%232F2B3A' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="backend.js"></script>
+</head>
+<body>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Special+Elite&display=swap">
+<style>
+/* Layout: one-screen app on tinted paper. Room = tasks | feed | timer, with tabs on phones. Lines over boxes; one accent tint the viewer can change. */
+:root {
+  --paper: #F8F8FA;
+  --card: #FFFFFF;
+  --ink: #2F2B3A;
+  --muted: #7A7590;
+  --line: #E4E1EC;
+  --blush: #F7CBD2;
+  --mint: #C6EAD6;
+  --butter: #FBEAB0;
+  --sky: #CBE1F6;
+  --lilac: #DCD2F5;
+  --peach: #FAD7C2;
+  --danger: #B9405C;
+  --tint: var(--lilac);
+  --bg: color-mix(in srgb, var(--paper) 72%, var(--tint));
+  --font-display: "Special Elite", "American Typewriter", "Courier New", monospace;
+  --font-body: "Courier Prime", "Courier New", Courier, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1B1A20; --card: #24222B; --ink: #ECE9F4; --muted: #A09AB4; --line: #36333F;
+    --blush: #5B3B46; --mint: #2E5042; --butter: #574F30; --sky: #2D4358; --lilac: #433961; --peach: #5A4233;
+    --danger: #F08AA0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1B1A20; --card: #24222B; --ink: #ECE9F4; --muted: #A09AB4; --line: #36333F;
+  --blush: #5B3B46; --mint: #2E5042; --butter: #574F30; --sky: #2D4358; --lilac: #433961; --peach: #5A4233;
+  --danger: #F08AA0; color-scheme: dark;
+}
+:root[data-tint="mint"] { --tint: var(--mint); }
+:root[data-tint="peach"] { --tint: var(--peach); }
+:root[data-tint="sky"] { --tint: var(--sky); }
+:root[data-tint="blush"] { --tint: var(--blush); }
+
+html, body { height: 100%; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+*, *::before, *::after { box-sizing: border-box; }
+#app { height: 100%; display: flex; flex-direction: column; }
+h1, h2, h3 { font-family: var(--font-display); font-weight: 400; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px dashed var(--ink); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.label { font-size: 12px; letter-spacing: .08em; color: var(--muted); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.stack { display: grid; gap: 10px; }
+.spacer { flex: 1; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 8px 16px; transition: border-color .12s, background .12s; }
+.btn:hover { border-color: var(--ink); }
+.btn:disabled { opacity: .45; cursor: not-allowed; border-color: var(--line); }
+.btn.primary { background: var(--tint); border-color: var(--ink); }
+.btn.sm { padding: 3px 11px; font-size: 13px; }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover { border-color: var(--line); }
+.btn.danger { color: var(--danger); }
+.link { background: none; border: 0; padding: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 3px; font-size: 13px; }
+.link:hover { color: var(--ink); }
+.field { width: 100%; border: 1px solid var(--line); background: var(--card); border-radius: 10px; padding: 9px 12px; }
+.field:focus { border-color: var(--ink); outline: none; }
+.err { color: var(--danger); font-size: 13px; min-height: 1.2em; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 2px 10px; font-size: 13px; }
+button.chip:hover { border-color: var(--ink); }
+.tag { border-radius: 999px; padding: 0 8px; background: var(--c, var(--line)); font-size: 11.5px; white-space: nowrap; }
+.empty { font-size: 13px; color: var(--muted); padding: 4px 0; }
+.av { width: 28px; height: 28px; flex: none; border-radius: 50%; background: var(--c, var(--lilac)); display: inline-grid; place-items: center; font-weight: 700; font-size: 13px; color: var(--ink); text-transform: uppercase; position: relative; }
+.av.sm { width: 20px; height: 20px; font-size: 10.5px; }
+.av .dot { position: absolute; right: -1px; bottom: -1px; width: 8px; height: 8px; border-radius: 50%; background: #3FAF73; border: 2px solid var(--card); }
+.avstack { display: inline-flex; }
+.avstack .av + .av { margin-left: -6px; }
+.avstack .av { box-shadow: 0 0 0 2px var(--bg); }
+
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; background: none; border: 0; padding: 6px 0; text-align: left; }
+.switch .knob { flex: none; width: 34px; height: 20px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); position: relative; transition: background .15s; }
+.switch .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
+.switch[aria-checked="true"] .knob { background: var(--tint); border-color: var(--ink); }
+.switch[aria-checked="true"] .knob::after { transform: translateX(14px); background: var(--ink); }
+.switch small { display: block; color: var(--muted); font-size: 12px; }
+
+.screen { flex: 1; display: grid; place-items: center; padding-block: 40px; overflow-y: auto; }
+.sheet { width: 100%; max-width: 480px; display: grid; gap: 28px; }
+.brand { font-size: clamp(36px, 7vw, 54px); }
+.caret { display: inline-block; width: .5em; height: .9em; background: var(--ink); vertical-align: -0.06em; margin-left: 4px; animation: blink 1.05s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+.swatch { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--line); background: var(--c); padding: 0; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--ink); }
+.check-row { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--muted); }
+.check-row input { margin-top: 3px; accent-color: var(--ink); }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+@media (max-width: 560px) { .choices { grid-template-columns: 1fr; } }
+.choice { display: grid; gap: 10px; align-content: start; }
+.choice h2 { font-size: 21px; }
+.code-input { text-transform: uppercase; letter-spacing: .4em; font-size: 20px; text-align: center; font-weight: 700; padding-left: calc(12px + .4em); }
+.notice { border: 1px dashed var(--danger); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+
+.room { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.topbar { display: flex; align-items: center; gap: 10px; padding-block: 12px; border-bottom: 1px solid var(--line); }
+.topbar h1 { font-size: 21px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.codechip { font-weight: 700; letter-spacing: .2em; background: transparent; border: 1px dashed var(--muted); border-radius: 8px; padding: 1px 6px 1px 9px; font-size: 13px; white-space: nowrap; }
+.codechip:hover { border-style: solid; border-color: var(--ink); }
+.streak { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.dropwrap { position: relative; }
+.badge-dot { position: absolute; top: 2px; right: 2px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+.dropdown { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 220px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 6px; display: grid; gap: 2px; box-shadow: 0 10px 30px rgba(20, 18, 28, .12); }
+.dropdown .item { text-align: left; background: none; border: 0; border-radius: 8px; padding: 7px 10px; font-size: 14px; display: flex; justify-content: space-between; gap: 10px; }
+.dropdown .item:hover { background: var(--bg); }
+.dropdown hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+.dropdown .pad { padding: 6px 10px; display: grid; gap: 8px; }
+
+.cols { flex: 1; min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr) 270px; gap: 28px; padding-block: 18px 0; }
+.col { min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 22px; overflow-y: auto; padding-bottom: 18px; }
+.col.feedcol { overflow: hidden; padding-bottom: 0; }
+.section { display: grid; gap: 8px; }
+.section-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.section-h h3 { font-size: 16px; }
+
+.goal { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: grid; gap: 8px; }
+.goal .text { overflow-wrap: anywhere; }
+.bar { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--ink); border-radius: 999px; transition: width .4s; }
+
+.tasklist { display: grid; }
+.task { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.task:last-child { border-bottom: 0; }
+.task .title { overflow-wrap: anywhere; }
+.task.done .title { text-decoration: line-through; color: var(--muted); }
+.task .meta { grid-column: 2; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.check { width: 20px; height: 20px; margin-top: 2px; border: 1.5px solid var(--ink); border-radius: 6px; background: var(--card); display: grid; place-items: center; padding: 0; font-weight: 700; font-size: 13px; line-height: 1; }
+.check[aria-checked="true"] { background: var(--mint); }
+.check:disabled { border-style: dashed; border-color: var(--muted); cursor: default; }
+details > summary { cursor: pointer; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+
+.feedcol { align-items: center; }
+.feedcol > * { width: 100%; max-width: 540px; }
+.composer { border: 1px solid var(--line); border-radius: 14px; background: var(--card); padding: 8px 10px; display: grid; gap: 4px; }
+.composer:focus-within { border-color: var(--ink); }
+.composer textarea { border: 0; resize: none; background: transparent; padding: 4px 2px; min-height: 40px; max-height: 120px; }
+.composer textarea:focus { outline: none; }
+.quota { display: flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); }
+.pip { width: 7px; height: 7px; border-radius: 50%; background: var(--ink); }
+.pip.used { background: var(--line); }
+.feed { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 14px 2px 20px; }
+.daybreak { text-align: center; font-size: 12px; color: var(--muted); letter-spacing: .1em; }
+.post { background: var(--card); border: 1px solid var(--line); border-radius: 14px; flex: none; }
+.post-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.post-head .who { font-weight: 700; }
+.post-head .sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.post-head .time { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.post-body { padding: 0 14px 4px 50px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.post-art { position: relative; overflow: hidden; background: var(--c); aspect-ratio: 16 / 7; max-width: 100%; display: grid; place-content: center; padding: 18px 18px 46px; text-align: center; }
+.post-art .big { font-family: var(--font-display); font-size: clamp(18px, 3vw, 24px); line-height: 1.25; overflow-wrap: anywhere; text-wrap: balance; }
+.stamp { position: absolute; right: 16px; bottom: 12px; display: grid; justify-items: center; font-family: var(--font-display); font-size: 28px; line-height: 1; letter-spacing: .14em; padding: 6px 12px 4px 16px; color: var(--danger); border: 3px solid var(--danger); border-radius: 8px; transform: rotate(-9deg); opacity: .88; }
+.stamp small { font-family: var(--font-body); font-size: 10px; letter-spacing: .22em; margin-top: 3px; }
+.post.stamping .stamp { animation: stamp-in .5s cubic-bezier(.3, 1.4, .5, 1) both; }
+.post.stamping .post-art { animation: thud .3s .28s ease-out; }
+.post.stamping .post-art::after { content: ""; position: absolute; right: 30px; bottom: 18px; width: 120px; height: 60px; border-radius: 50%; background: var(--danger); opacity: 0; animation: ink .6s .25s ease-out; pointer-events: none; }
+@keyframes stamp-in { 0% { opacity: 0; transform: rotate(-22deg) scale(2.8); } 55% { opacity: 1; transform: rotate(-9deg) scale(.9); } 100% { opacity: .88; transform: rotate(-9deg) scale(1); } }
+@keyframes thud { 30% { transform: translateY(3px) scale(.985); } 100% { transform: none; } }
+@keyframes ink { 0% { opacity: .18; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.5); } }
+.post-foot { padding: 8px 12px 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.react { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 0 8px; font-size: 13px; }
+.react[aria-pressed="true"] { border-color: var(--ink); background: var(--butter); }
+.react.add { opacity: .45; }
+.post:hover .react.add, .react.add:focus-visible { opacity: 1; }
+.post.help { border-color: var(--peach); }
+.more { position: relative; }
+.more > summary { padding: 0 6px; color: var(--muted); border-radius: 6px; font-weight: 700; letter-spacing: .1em; }
+.more > summary:hover { color: var(--ink); }
+.more .dropdown { min-width: 150px; }
+.note-line { display: flex; gap: 8px; align-items: baseline; font-size: 13px; color: var(--muted); padding: 0 12px; flex: none; }
+.note-line .time { margin-left: auto; font-size: 12px; white-space: nowrap; }
+
+.timer { display: grid; justify-items: center; gap: 12px; text-align: center; }
+.ring { position: relative; width: 160px; height: 160px; max-width: 100%; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring .track { fill: none; stroke: var(--line); stroke-width: 5; }
+.ring .prog { fill: none; stroke: var(--ink); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .9s linear; }
+.ring .inner { position: absolute; inset: 0; display: grid; place-content: center; gap: 2px; }
+.ring .clock { font-family: var(--font-display); font-size: 36px; font-variant-numeric: tabular-nums; }
+.phase { font-size: 12px; color: var(--muted); letter-spacing: .1em; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 2px; gap: 2px; background: var(--card); }
+.seg button { border: 0; background: none; border-radius: 999px; padding: 2px 11px; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--card); }
+.statgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; }
+.stat b { display: block; font-family: var(--font-display); font-size: 24px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 11.5px; color: var(--muted); }
+.badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge { font-size: 12px; border: 1px solid var(--ink); border-radius: 999px; padding: 1px 9px; background: var(--butter); }
+.badge.locked { border: 1px dashed var(--line); background: transparent; color: var(--muted); }
+.people { display: grid; gap: 10px; }
+.person { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; font-size: 14px; }
+.person .status { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.person .score { font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--ink); }
+
+.tabs { display: none; }
+@media (max-width: 920px) {
+  .cols { grid-template-columns: minmax(0, 1fr); }
+  .col { display: none; }
+  .room[data-tab="tasks"] .taskcol, .room[data-tab="feed"] .feedcol, .room[data-tab="timer"] .sidecol { display: flex; }
+  .tabs { display: flex; gap: 6px; padding-block: 8px calc(8px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); }
+  .tabs button { flex: 1; border: 1px solid transparent; background: none; border-radius: 999px; padding: 6px; }
+  .tabs button[aria-selected="true"] { border-color: var(--ink); background: var(--tint); }
+  .hide-sm { display: none !important; }
+}
+
+.scrim { position: fixed; inset: 0; background: rgba(20, 18, 28, .3); z-index: 40; }
+.panel {
+  position: fixed; top: 0; bottom: 0; right: 0; width: min(400px, 100%); z-index: 41;
+  background: var(--bg); border-left: 1px solid var(--line);
+  padding: calc(20px + env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px)) calc(24px + env(safe-area-inset-bottom, 0px)) 22px;
+  display: flex; flex-direction: column; gap: 20px; overflow-y: auto; animation: slidein .18s ease-out;
+}
+@keyframes slidein { from { transform: translateX(24px); opacity: .5; } }
+.panel h2 { font-size: 23px; }
+.panel h3 { font-size: 16px; }
+.panel .group { display: grid; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.pickers { display: flex; gap: 6px; flex-wrap: wrap; }
+.pick { border: 1px solid var(--line); background: var(--c, var(--card)); border-radius: 999px; padding: 2px 11px; font-size: 13px; }
+.pick[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.listrow { display: flex; gap: 10px; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.listrow > :first-child { min-width: 0; overflow-wrap: anywhere; }
+.bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; align-items: end; height: 130px; }
+.bars .b { display: grid; gap: 4px; justify-items: center; align-content: end; height: 100%; font-size: 11px; color: var(--muted); }
+.bars .fill { width: 100%; max-width: 30px; background: var(--tint); border: 1px solid var(--ink); border-radius: 6px 6px 2px 2px; min-height: 2px; }
+.flash { background: var(--card); border: 1px solid var(--line); border-radius: 14px; min-height: 160px; padding: 20px; display: grid; place-content: center; text-align: center; gap: 12px; }
+.flash .q { font-family: var(--font-display); font-size: 21px; overflow-wrap: anywhere; }
+.flash .a { overflow-wrap: anywhere; }
+.prose { display: grid; gap: 12px; font-size: 14px; }
+.prose h3 { margin-top: 6px; }
+
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--card); padding: 8px 16px; border-radius: 999px; z-index: 60; font-size: 14px; max-width: calc(100% - 32px); text-align: center; }
+#confetti { position: fixed; inset: 0; pointer-events: none; z-index: 55; width: 100%; height: 100%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .caret, .panel, .post.stamping .stamp, .post.stamping .post-art, .post.stamping .post-art::after { animation: none; }
+  .ring .prog, .bar > span { transition: none; }
+}
+</style>
+
+<div id="app">
+  <section class="screen" id="v-name">
+    <div class="sheet">
+      <div class="stack" style="gap:12px">
+        <h1 class="brand">study group<span class="caret" aria-hidden="true"></span></h1>
+        <p class="muted">A quiet room for getting homework done with friends. No account needed.</p>
+      </div>
+      <form class="stack" id="nameForm" autocomplete="off" style="gap:14px">
+        <label class="label" for="nameInput">what should we call you?</label>
+        <input class="field" id="nameInput" maxlength="20" placeholder="first name or nickname" required>
+        <span class="label" id="colorLabel">your color</span>
+        <div class="swatches" id="swatches" role="group" aria-labelledby="colorLabel"></div>
+        <label class="check-row" for="ageCheck"><input type="checkbox" id="ageCheck" required> <span>I'm 13 or older, and I'll use a nickname instead of my full name.</span></label>
+        <div class="row"><button class="btn primary" type="submit">continue →</button><span class="spacer"></span><button class="link" type="button" data-open="privacy">privacy &amp; safety</button></div>
+      </form>
+    </div>
+  </section>
+
+  <section class="screen" id="v-lobby" hidden>
+    <div class="sheet" style="max-width:620px">
+      <div class="stack" style="gap:6px">
+        <h1 style="font-size:clamp(28px,5vw,38px)">hey, <span id="lobbyName"></span>.</h1>
+        <p class="muted">Start a room and share the code, or join a friend's. <button class="link" id="changeName" type="button">change name</button></p>
+      </div>
+      <div class="notice" id="noDb" hidden>Can't connect to rooms right now. Check your internet and reload the page.</div>
+      <div class="choices">
+        <form class="choice" id="createForm" autocomplete="off">
+          <h2>start a room</h2>
+          <label class="label" for="roomName">room name (optional)</label>
+          <input class="field" id="roomName" maxlength="32" placeholder="bio test cram">
+          <div><button class="btn primary" type="submit" id="createBtn">create room</button></div>
+          <div class="err" id="createErr"></div>
+        </form>
+        <form class="choice" id="joinForm" autocomplete="off">
+          <h2>join a room</h2>
+          <label class="label" for="codeInput">6-character code</label>
+          <input class="field code-input" id="codeInput" maxlength="6" placeholder="······" autocapitalize="characters" spellcheck="false">
+          <div><button class="btn primary" type="submit" id="joinBtn">join room</button></div>
+          <div class="err" id="joinErr"></div>
+        </form>
+      </div>
+      <div class="stack" id="recentWrap" hidden>
+        <span class="label">jump back in</span>
+        <div class="row" id="recent" style="gap:8px"></div>
+      </div>
+      <div><button class="link" type="button" data-open="privacy">privacy &amp; safety</button></div>
+    </div>
+  </section>
+
+  <section class="screen" id="v-wait" hidden>
+    <div class="sheet" style="text-align:center;justify-items:center">
+      <h1 style="font-size:30px">knock knock.</h1>
+      <p class="muted" id="waitText">Waiting for the room's creator to let you in.</p>
+      <button class="btn" id="cancelWait" type="button">cancel</button>
+    </div>
+  </section>
+
+  <section class="room" id="v-room" data-tab="feed" hidden>
+    <header class="topbar">
+      <h1 id="roomTitle">room</h1>
+      <button class="codechip" id="copyCode" title="Copy invite" type="button"><span id="roomCode">------</span></button>
+      <button class="btn sm ghost hide-sm" id="inviteBtn" type="button">invite</button>
+      <span class="spacer"></span>
+      <span class="avstack hide-sm" id="onlineStack"></span>
+      <span class="streak hide-sm" id="groupStreak"></span>
+      <div class="dropwrap">
+        <button class="btn sm ghost" id="soundBtn" type="button" aria-haspopup="true" aria-expanded="false">sound</button>
+        <div class="dropdown" id="soundMenu" hidden>
+          <div class="pad">
+            <span class="label">background sound</span>
+            <div class="pickers" id="soundPick"></div>
+            <label class="label" for="vol">volume</label>
+            <input type="range" id="vol" min="0" max="100" value="35">
+          </div>
+        </div>
+      </div>
+      <div class="dropwrap">
+        <button class="btn sm ghost" id="menuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Room menu">menu</button>
+        <span class="badge-dot" id="menuDot" hidden></span>
+        <div class="dropdown" id="roomMenu" hidden></div>
+      </div>
+    </header>
+    <p class="muted small" id="connNote" style="padding-top:8px" hidden></p>
+
+    <div class="cols">
+      <aside class="col taskcol" aria-label="Tasks">
+        <div id="goalWrap"></div>
+        <button class="btn primary" id="addTaskBtn" type="button">+ add a task</button>
+        <div class="section">
+          <div class="section-h"><h3>my tasks</h3><span class="label" id="myCount"></span></div>
+          <div class="tasklist" id="myTasks"></div>
+        </div>
+        <div class="section">
+          <div class="section-h"><h3>the group is on</h3></div>
+          <div class="tasklist" id="groupTasks"></div>
+        </div>
+        <details class="section">
+          <summary class="section-h"><h3>done today</h3><span class="label" id="doneCount">0</span></summary>
+          <div class="tasklist" id="doneTasks"></div>
+        </details>
+      </aside>
+
+      <main class="col feedcol" aria-label="Room feed">
+        <form class="composer" id="msgForm" autocomplete="off">
+          <label for="msgInput" class="label">post an update</label>
+          <textarea id="msgInput" maxlength="200" rows="2" placeholder="what are you up to?"></textarea>
+          <div class="row" style="justify-content:space-between">
+            <div class="quota" id="quota"></div>
+            <button class="btn sm primary" type="submit" id="sendBtn">post</button>
+          </div>
+        </form>
+        <div class="feed" id="feed" aria-live="polite"></div>
+      </main>
+
+      <aside class="col sidecol" aria-label="Timer and stats">
+        <div class="timer">
+          <span class="phase" id="phaseTag">ROOM TIMER</span>
+          <div class="ring">
+            <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="45"></circle><circle class="prog" id="ringProg" cx="50" cy="50" r="45" stroke-dasharray="282.74" stroke-dashoffset="282.74"></circle></svg>
+            <div class="inner"><span class="clock" id="clock">25:00</span><span class="label" id="clockSub">ready when you are</span></div>
+          </div>
+          <div class="seg" role="group" aria-label="Focus length" id="lenSeg">
+            <button type="button" data-len="15">15</button><button type="button" data-len="25" aria-pressed="true">25</button><button type="button" data-len="50">50</button>
+          </div>
+          <div class="row" style="justify-content:center;gap:6px">
+            <button class="btn sm primary" id="startFocus" type="button">focus</button>
+            <button class="btn sm" id="startBreak" type="button">break</button>
+            <button class="btn sm ghost" id="stopTimer" type="button">stop</button>
+          </div>
+          <button class="link" id="quizBtn" type="button" hidden>quiz yourself with flashcards</button>
+          <p class="muted" style="font-size:12px" id="timerNote">Everyone in the room shares this timer.</p>
+        </div>
+
+        <div class="seg" aria-label="Stats view" id="sideSeg" style="align-self:center">
+          <button type="button" data-pane="you" aria-pressed="true">you</button><button type="button" data-pane="group" aria-pressed="false">group</button>
+        </div>
+        <div id="paneYou" class="stack" style="gap:16px">
+          <div class="statgrid">
+            <div class="stat"><b id="stDone">0</b><span>done today</span></div>
+            <div class="stat"><b id="stMin">0</b><span>focus min</span></div>
+            <div class="stat"><b id="stStreak">0</b><span>day streak</span></div>
+          </div>
+          <div class="badges" id="badgeRow" style="justify-content:center"></div>
+          <div class="row" style="justify-content:center"><button class="btn sm" type="button" data-open="recap">weekly recap</button><button class="btn sm" type="button" data-open="cards">flashcards</button></div>
+        </div>
+        <div id="paneGroup" class="people" hidden></div>
+      </aside>
+    </div>
+
+    <nav class="tabs" role="tablist" aria-label="Room sections">
+      <button role="tab" data-tab="tasks" aria-selected="false" type="button">tasks</button>
+      <button role="tab" data-tab="feed" aria-selected="true" type="button">feed</button>
+      <button role="tab" data-tab="timer" aria-selected="false" type="button">timer</button>
+    </nav>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="panel" id="panel" hidden role="dialog" aria-modal="true" aria-labelledby="panelTitle">
+  <div class="row" style="justify-content:space-between"><h2 id="panelTitle">panel</h2><button class="btn sm" id="closePanel" type="button">close</button></div>
+  <div id="panelBody" class="stack" style="gap:18px"></div>
+</aside>
+<div class="toast" id="toast" hidden role="status"></div>
+<canvas id="confetti" hidden></canvas>
+
+<script>
+(() => {
+'use strict';
+const $ = (id) => document.getElementById(id);
+const COLORS = ['lilac', 'blush', 'mint', 'sky', 'butter', 'peach'];
+const TINTS = ['lilac', 'mint', 'peach', 'sky', 'blush'];
+const SUBJECTS = [{ k: 'math', c: 'sky' }, { k: 'science', c: 'mint' }, { k: 'english', c: 'blush' }, { k: 'history', c: 'butter' }, { k: 'language', c: 'peach' }, { k: 'other', c: 'lilac' }];
+const ESTS = [15, 25, 50, 90];
+const SOUNDS = [['off', 'off'], ['brown', 'brown noise'], ['rain', 'rain'], ['cafe', 'café'], ['lofi', 'lo-fi']];
+const MSG_LIMIT = 6, HOUR = 3600000, DAY = 86400000;
+const ALPH = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CODE_RE = /^[A-HJ-NP-Z2-9]{6}$/;
+const REACTS = ['👏', '🔥', '⭐', '💪'];
+const BREAK_IDEAS = ['stand up and stretch', 'refill your water', 'look out a window', 'take a few slow breaths', 'grab a snack', 'walk around the room'];
+const BLOCK = ['fuck', 'shit', 'bitch', 'asshole', 'bastard', 'dick', 'cunt', 'slut', 'whore', 'retard', 'fag', 'nigg', 'porn', 'kys'];
+const BADGES = [
+  { k: 'first finish', t: (s) => s.doneTotal >= 1 },
+  { k: 'on a roll · 5 tasks', t: (s) => s.doneTotal >= 5 },
+  { k: 'powerhouse · 25 tasks', t: (s) => s.doneTotal >= 25 },
+  { k: 'first hour', t: (s) => s.focusTotal >= 60 },
+  { k: 'deep worker · 10h', t: (s) => s.focusTotal >= 600 },
+  { k: '3-day streak', t: (s) => s.streak >= 3 },
+  { k: '7-day streak', t: (s) => s.streak >= 7 },
+  { k: 'team player', t: (s) => s.teamDone >= 1 },
+];
+
+const ls = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+const safeColor = (c) => COLORS.includes(c) ? c : 'lilac';
+const subjColor = (k) => (SUBJECTS.find(s => s.k === k) || SUBJECTS[5]).c;
+const dayKey = (ts) => new Date(ts).toLocaleDateString('en-CA');
+const today = () => dayKey(Date.now());
+const addDays = (key, n) => { const d = new Date(key + 'T12:00'); d.setDate(d.getDate() + n); return dayKey(d); };
+const isToday = (ts) => !!ts && dayKey(ts) === today();
+const clean = (s) => { let out = s; for (const w of BLOCK) out = out.replace(new RegExp(w + '\\w*', 'gi'), (m) => '•'.repeat(m.length)); return out; };
+const fmtMin = (m) => m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm';
+
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'text') el.textContent = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) { if (c == null || c === false) continue; el.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  return el;
+}
+const av = (name, color, cls = '') => h('span', { class: 'av ' + cls, style: `--c: var(--${safeColor(color)})`, 'aria-hidden': 'true' }, (name || '?').trim().charAt(0) || '?');
+const tag = (text, c) => h('span', { class: 'tag', style: c ? `--c: var(--${c})` : null, text });
+function sw(label, sub, on, onchange) {
+  return h('button', { type: 'button', class: 'switch', role: 'switch', 'aria-checked': String(!!on), onclick: (e) => { const b = e.currentTarget; const v = b.getAttribute('aria-checked') !== 'true'; b.setAttribute('aria-checked', String(v)); onchange(v); } },
+    h('span', {}, label, sub ? h('small', { text: sub }) : null), h('span', { class: 'knob', 'aria-hidden': 'true' }));
+}
+function ago(ts) {
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 45) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + 'm';
+  if (s < DAY / 1000) return Math.round(s / 3600) + 'h';
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+let toastT;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2800); }
+function copyText(text, okMsg) { try { navigator.clipboard.writeText(text).then(() => toast(okMsg), () => toast(text)); } catch { toast(text); } }
+
+// ---------- state ----------
+const S = {
+  me: { id: null, name: ls.get('sg-name', ''), color: safeColor(ls.get('sg-color', COLORS[Math.floor(Math.random() * COLORS.length)])) },
+  realId: null, db: null, roomCap: null, ready: null,
+  code: null, room: null, events: [], tasks: [], members: {}, reports: [], peers: [], myMsgTs: [],
+  unsubs: [], named: null, focusLen: 25, lastPresence: '', loaded: false,
+  stampIds: new Set(), seen: new Set(), primed: false, cards: ls.get('sg-cards', []), sidePane: 'you',
+};
+let localId = ls.get('sg-localid', null);
+if (!localId) { localId = 'l' + Math.random().toString(36).slice(2, 12); ls.set('sg-localid', localId); }
+{ const t = ls.get('sg-tint', 'lilac'); document.documentElement.dataset.tint = TINTS.includes(t) ? t : 'lilac'; }
+
+// Backend hook: a host page may define window.SG_BACKEND (same shape as the claude.ai capabilities) before this script.
+const use = (n) => {
+  if (window.SG_BACKEND && typeof window.SG_BACKEND.use === 'function') return window.SG_BACKEND.use(n).catch(() => null);
+  return (window.claude && typeof window.claude.use === 'function') ? window.claude.use(n).catch(() => null) : Promise.resolve(null);
+};
+S.ready = Promise.all([use('db'), use('user'), use('room')]).then(async ([db, user, room]) => {
+  S.db = db; S.roomCap = room;
+  try { S.realId = user ? await user.id() : null; } catch {}
+  S.me.id = S.realId || localId;
+  $('noDb').hidden = !!db;
+  if (db && S.realId) {
+    try { const c = await db.doc('data/users/' + S.realId + '/flashcards').get(); if (c.exists && Array.isArray(c.data().cards)) S.cards = c.data().cards; } catch {}
+  }
+  return !!db;
+});
+
+const isCreator = () => !!(S.room && S.room.createdBy && S.room.createdBy === S.me.id);
+const settings = () => (S.room && S.room.settings) || {};
+function show(view) { for (const v of ['v-name', 'v-lobby', 'v-wait', 'v-room']) $(v).hidden = v !== view; }
+
+// ---------- onboarding ----------
+function renderSwatches() {
+  const wrap = $('swatches'); wrap.textContent = '';
+  for (const c of COLORS) wrap.append(h('button', { type: 'button', class: 'swatch', style: `--c: var(--${c})`, 'aria-label': c, 'aria-pressed': String(S.me.color === c), onclick: () => { S.me.color = c; renderSwatches(); } }));
+}
+$('nameInput').value = S.me.name;
+$('ageCheck').checked = !!ls.get('sg-age', false);
+renderSwatches();
+$('nameForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const n = clean($('nameInput').value.trim().replace(/\s+/g, ' ')).slice(0, 20);
+  if (!n) return;
+  S.me.name = n; ls.set('sg-name', n); ls.set('sg-color', S.me.color); ls.set('sg-age', true);
+  goLobby(true);
+});
+$('changeName').addEventListener('click', () => { show('v-name'); $('nameInput').focus(); });
+
+function goLobby(tryHash) {
+  $('lobbyName').textContent = S.me.name;
+  show('v-lobby');
+  renderRecent();
+  const hc = (location.hash || '').slice(1).toUpperCase();
+  if (tryHash && CODE_RE.test(hc)) { $('codeInput').value = hc; joinRoom(hc); }
+}
+function renderRecent() {
+  const rec = ls.get('sg-recent', []);
+  $('recentWrap').hidden = !rec.length;
+  const wrap = $('recent'); wrap.textContent = '';
+  for (const r of rec.slice(0, 6)) wrap.append(h('button', { type: 'button', class: 'chip', onclick: () => joinRoom(r.code) }, h('b', { text: r.code }), r.name || ''));
+}
+$('codeInput').addEventListener('input', (e) => {
+  e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/[01IO]/g, '').slice(0, 6);
+  $('joinErr').textContent = '';
+});
+$('joinForm').addEventListener('submit', (e) => { e.preventDefault(); joinRoom($('codeInput').value.trim().toUpperCase()); });
+$('createForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = $('createBtn'); btn.disabled = true; $('createErr').textContent = '';
+  try {
+    if (!(await S.ready)) { $('createErr').textContent = 'No connection yet. Check your internet and reload.'; return; }
+    let code = null;
+    for (let i = 0; i < 6 && !code; i++) {
+      const c = Array.from({ length: 6 }, () => ALPH[Math.floor(Math.random() * ALPH.length)]).join('');
+      if (!(await S.db.doc('rooms/' + c).get()).exists) code = c;
+    }
+    if (!code) throw new Error('busy');
+    const name = clean($('roomName').value.trim()).slice(0, 32) || S.me.name + "'s room";
+    const data = { name, createdAt: Date.now(), createdBy: S.me.id, creatorName: S.me.name, timer: { phase: 'idle', endsAt: 0, length: 25, by: '' }, settings: { locked: false, approval: false, quietFocus: false, classMode: false }, banned: [], goal: null };
+    await S.db.doc('rooms/' + code).set(data);
+    enterRoom(code, data);
+  } catch (err) {
+    $('createErr').textContent = err && err.code === 'invalid_argument' ? "Couldn't create the room. Reload the page and try again."
+      : err && err.code === 'quota_exceeded' ? 'The site is full right now. Try again later.' : "Couldn't create the room. Try again in a moment.";
+  } finally { btn.disabled = false; }
+});
+
+let waitUnsub = null;
+async function joinRoom(code) {
+  $('joinErr').textContent = '';
+  if (!CODE_RE.test(code)) { $('joinErr').textContent = 'Codes are 6 letters and numbers, like K7Q2MB.'; return; }
+  const btn = $('joinBtn'); btn.disabled = true;
+  try {
+    if (!(await S.ready)) { $('joinErr').textContent = 'No connection yet. Check your internet and reload.'; return; }
+    const snap = await S.db.doc('rooms/' + code).get();
+    if (!snap.exists) { $('joinErr').textContent = `No room with code ${code}. Double-check it with whoever sent it.`; return; }
+    const room = snap.data();
+    const st = room.settings || {};
+    if ((room.banned || []).includes(S.me.id)) { $('joinErr').textContent = "You can't join this room."; return; }
+    const mref = S.db.doc(`rooms/${code}/members/${S.me.id}`);
+    const ms = await mref.get();
+    const member = ms.exists ? ms.data() : null;
+    const creator = room.createdBy === S.me.id;
+    if (!creator && st.locked && !member) { $('joinErr').textContent = 'This room is locked. Ask the person who made it to unlock it.'; return; }
+    if (!creator && st.approval && (!member || member.pending)) {
+      if (!member) await mref.set({ name: S.me.name, color: S.me.color, joinedAt: Date.now(), lastSeen: 0, pending: true, focusLog: {}, focusTotal: 0 });
+      return waitForApproval(code, room);
+    }
+    enterRoom(code, room);
+  } catch (e) {
+    $('joinErr').textContent = e && e.code === 'invalid_argument' ? "You don't have access to that room." : "Couldn't reach that room. Try again in a moment.";
+  } finally { btn.disabled = false; }
+}
+function waitForApproval(code, room) {
+  show('v-wait');
+  $('waitText').textContent = `Waiting for ${room.creatorName || "the room's creator"} to let you into ${room.name || 'the room'}.`;
+  if (waitUnsub) waitUnsub();
+  let seen = false;
+  waitUnsub = S.db.doc(`rooms/${code}/members/${S.me.id}`).onSnapshot((s) => {
+    if (s.exists) { seen = true; if (!s.data().pending) { waitUnsub(); waitUnsub = null; enterRoom(code, room); } }
+    else if (seen && !s.metadata.fromCache) { waitUnsub(); waitUnsub = null; goLobby(false); $('joinErr').textContent = "Your request to join wasn't accepted."; }
+  }, () => {});
+}
+$('cancelWait').addEventListener('click', () => { if (waitUnsub) { waitUnsub(); waitUnsub = null; } goLobby(false); });
+
+// ---------- room lifecycle ----------
+const roomRef = () => S.db.doc('rooms/' + S.code);
+const col = (name) => S.db.collection('rooms/' + S.code + '/' + name);
+
+async function enterRoom(code, data) {
+  leaveRoom(true);
+  Object.assign(S, { code, room: data || null, events: [], tasks: [], members: {}, reports: [], peers: [], myMsgTs: [], loaded: false, seen: new Set(), stampIds: new Set(), primed: false });
+  try { history.replaceState(null, '', '#' + code); } catch {}
+  const rec = ls.get('sg-recent', []).filter(r => r.code !== code);
+  rec.unshift({ code, name: (data && data.name) || '' }); ls.set('sg-recent', rec.slice(0, 8));
+  $('roomCode').textContent = code;
+  show('v-room');
+  renderAll();
+
+  const note = $('connNote');
+  const loadTimer = setTimeout(() => { if (!S.loaded) { note.hidden = false; note.textContent = "Can't reach the room yet. It will catch up when the connection comes back."; } }, 10000);
+  const onErr = (e) => { note.hidden = false; note.textContent = e && e.code === 'revoked' ? 'This room is no longer available to you.' : 'Lost the live connection. Reload to reconnect.'; };
+
+  S.unsubs.push(roomRef().onSnapshot((s) => {
+    if (!s.exists) { if (!s.metadata.fromCache && S.code === code) { leaveRoom(false); toast('This room was deleted.'); } return; }
+    const wasCreator = isCreator();
+    S.room = s.data();
+    if ((S.room.banned || []).includes(S.me.id)) { leaveRoom(false); toast('You were removed from this room.'); return; }
+    if (isCreator() && !wasCreator) subscribeReports();
+    renderHeader(); renderGoal(); renderTimer(); renderQuota(); renderSide(); updatePresence(); refreshPanel();
+  }, onErr));
+  S.unsubs.push(col('events').orderBy('ts', 'desc').limit(120).onSnapshot((s) => {
+    S.events = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    let mine = false;
+    for (const ev of S.events) {
+      if (S.seen.has(ev.id)) continue;
+      S.seen.add(ev.id);
+      if (S.primed && (ev.type === 'done' || ev.type === 'goal') && Date.now() - (ev.ts || 0) < 60000) { S.stampIds.add(ev.id); if (ev.uid === S.me.id) mine = true; }
+    }
+    S.primed = true;
+    if (!s.metadata.fromCache) { S.loaded = true; clearTimeout(loadTimer); note.hidden = true; }
+    renderFeed();
+    if (mine) showStamp();
+  }, onErr));
+  S.unsubs.push(col('tasks').orderBy('createdAt', 'asc').limit(400).onSnapshot((s) => {
+    S.tasks = s.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTasks(); renderGoal(); renderSide(); renderHeader(); updatePresence();
+  }, onErr));
+  S.unsubs.push(col('members').limit(300).onSnapshot((s) => {
+    const m = {}; for (const d of s.docs) m[d.id] = d.data(); S.members = m;
+    renderSide(); renderHeader(); refreshPanel();
+  }, onErr));
+  S.unsubs.push(col('events').where('uid', '==', S.me.id).where('type', '==', 'msg').orderBy('ts', 'desc').limit(MSG_LIMIT).onSnapshot((s) => {
+    S.myMsgTs = s.docs.map(d => d.data().ts || 0); renderQuota();
+  }, () => {}));
+  if (isCreator()) subscribeReports();
+
+  try {
+    const mref = col('members').doc(S.me.id);
+    const ms = await mref.get();
+    const prev = ms.exists ? ms.data() : null;
+    if (prev) await mref.update({ name: S.me.name, color: S.me.color, lastSeen: Date.now(), pending: false });
+    else await mref.set({ name: S.me.name, color: S.me.color, joinedAt: Date.now(), lastSeen: Date.now(), pending: false, focusLog: {}, focusTotal: 0 });
+    if (!prev || prev.pending || Date.now() - (prev.lastSeen || 0) > 30 * 60000) addEvent({ type: 'join' });
+  } catch (e) {
+    if (e && e.code === 'invalid_argument') { note.hidden = false; note.textContent = "You can't post in this room right now."; }
+  }
+  if (isCreator()) pruneOld();
+
+  if (S.roomCap && typeof S.roomCap.join === 'function') {
+    try {
+      const named = await S.roomCap.join('sg-' + code.toLowerCase());
+      if (S.code !== code) { named.leave(); return; }
+      S.named = named;
+      named.onPeers((ch) => { S.peers = ch.peers.filter(p => !p.isMe); renderSide(); renderHeader(); }, () => {});
+      S.lastPresence = ''; updatePresence();
+    } catch {}
+  }
+}
+let reportsUnsub = null;
+function subscribeReports() {
+  if (reportsUnsub || !S.code) return;
+  reportsUnsub = col('reports').orderBy('ts', 'desc').limit(50).onSnapshot((s) => { S.reports = s.docs.map(d => ({ id: d.id, ...d.data() })); renderHeader(); refreshPanel(); }, () => {});
+  S.unsubs.push(() => { if (reportsUnsub) reportsUnsub(); reportsUnsub = null; });
+}
+async function pruneOld() {
+  try {
+    const old = await col('events').where('ts', '<', Date.now() - 14 * DAY).limit(100).get();
+    for (const d of old.docs) await col('events').doc(d.id).delete();
+  } catch {}
+}
+function leaveRoom(silent) {
+  for (const u of S.unsubs) { try { u(); } catch {} }
+  S.unsubs = []; reportsUnsub = null;
+  if (S.named) { try { S.named.leave(); } catch {} S.named = null; }
+  S.code = null; S.room = null;
+  closePanel(); closeDrops();
+  if (!silent) { try { history.replaceState(null, '', location.pathname + location.search); } catch {} goLobby(false); }
+}
+function inviteText() { return `Join my study room on Study Group! Code: ${S.code}`; }
+$('copyCode').addEventListener('click', () => copyText(inviteText(), `Copied invite for ${S.code}`));
+$('inviteBtn').addEventListener('click', () => copyText(inviteText(), `Copied invite for ${S.code}`));
+
+async function addEvent(ev) {
+  if (!S.db || !S.code) return;
+  return col('events').add({ uid: S.me.id, name: S.me.name, color: S.me.color, ts: Date.now(), ...ev });
+}
+function updatePresence() {
+  if (!S.named) return;
+  const mine = myOpenTasks()[0];
+  const t = S.room && S.room.timer;
+  const phase = t && t.phase !== 'idle' && t.endsAt > Date.now() ? t.phase : 'idle';
+  const p = { uid: S.me.id, name: S.me.name, color: S.me.color, task: mine ? mine.title.slice(0, 60) : '', phase };
+  const key = JSON.stringify(p);
+  if (key === S.lastPresence) return;
+  S.lastPresence = key;
+  S.named.presence(p).catch(() => {});
+}
+
+// ---------- header + menus ----------
+function activeMembers() { return Object.entries(S.members).filter(([, m]) => !m.pending); }
+function renderHeader() {
+  if (!S.code) return;
+  $('roomTitle').textContent = (S.room && S.room.name) || 'study room';
+  const wrap = $('onlineStack'); wrap.textContent = '';
+  const on = onlineIds();
+  for (const uid of [...on].slice(0, 6)) { const m = uid === S.me.id ? S.me : (S.members[uid] || (peerFor(uid) || {}).presence || {}); wrap.append(av(m.name, m.color, 'sm')); }
+  wrap.title = on.size + ' here now';
+  const gs = groupStreak();
+  $('groupStreak').textContent = gs > 0 ? `group streak ${gs}d` : '';
+  $('groupStreak').title = 'Days in a row where at least 2 people studied in this room';
+  const pending = Object.values(S.members).filter(m => m.pending).length;
+  $('menuDot').hidden = !(isCreator() && (pending || S.reports.length));
+}
+function closeDrops() { for (const [b, m] of [['soundBtn', 'soundMenu'], ['menuBtn', 'roomMenu']]) { $(m).hidden = true; $(b).setAttribute('aria-expanded', 'false'); } }
+function toggleDrop(btn, menu, build) {
+  const open = $(menu).hidden;
+  closeDrops();
+  if (!open) return;
+  if (build) build();
+  $(menu).hidden = false; $(btn).setAttribute('aria-expanded', 'true');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.dropwrap')) closeDrops();
+  document.querySelectorAll('details.more[open]').forEach(d => { if (!d.contains(e.target)) d.open = false; });
+});
+$('soundBtn').addEventListener('click', () => toggleDrop('soundBtn', 'soundMenu', renderSoundPick));
+$('menuBtn').addEventListener('click', () => toggleDrop('menuBtn', 'roomMenu', buildMenu));
+function buildMenu() {
+  const m = $('roomMenu'); m.textContent = '';
+  const item = (label, fn, extra) => m.append(h('button', { type: 'button', class: 'item', onclick: () => { closeDrops(); fn(); } }, h('span', { text: label }), extra ? h('span', { class: 'tag', style: '--c: var(--blush)', text: extra }) : null));
+  if (isCreator()) {
+    const n = Object.values(S.members).filter(x => x.pending).length + S.reports.length;
+    item('room settings', () => openPanel('settings'), n ? String(n) : null);
+  } else item('room info', () => openPanel('info'));
+  item('copy invite', () => copyText(inviteText(), `Copied invite for ${S.code}`));
+  item('weekly recap', () => openPanel('recap'));
+  item('flashcards', () => openPanel('cards'));
+  item('privacy & safety', () => openPanel('privacy'));
+  m.append(h('hr'));
+  m.append(h('div', { class: 'pad' }, h('span', { class: 'label', text: 'page color' }), h('div', { class: 'swatches' }, TINTS.map(t => h('button', {
+    type: 'button', class: 'swatch', style: `--c: var(--${t}); width:24px; height:24px`, 'aria-label': t + ' page color', 'aria-pressed': String(document.documentElement.dataset.tint === t),
+    onclick: (e) => { e.stopPropagation(); document.documentElement.dataset.tint = t; ls.set('sg-tint', t); buildMenu(); },
+  })))), h('hr'));
+  item('leave room', () => leaveRoom(false));
+}
+
+// ---------- goal ----------
+function goalProgress() {
+  const g = S.room && S.room.goal;
+  if (!g || !g.text) return null;
+  const done = S.tasks.filter(t => t.done && (t.doneAt || 0) >= (g.setAt || 0)).length;
+  return { g, done, target: Math.max(1, g.target || 10) };
+}
+function renderGoal() {
+  const wrap = $('goalWrap'); wrap.textContent = '';
+  if (!S.code) return;
+  const gp = goalProgress();
+  if (!gp) { if (isCreator()) wrap.append(h('button', { type: 'button', class: 'link', onclick: () => openPanel('settings') }, '+ set a room goal')); return; }
+  const pct = Math.min(100, Math.round(gp.done / gp.target * 100));
+  const due = gp.g.due ? dueInfo(gp.g.due) : null;
+  wrap.append(h('div', { class: 'goal' },
+    h('div', { class: 'section-h' }, h('span', { class: 'label', text: 'ROOM GOAL' }), due ? tag(due.text, due.c) : null),
+    h('div', { class: 'text', text: gp.g.text }),
+    h('div', { class: 'bar', role: 'progressbar', 'aria-label': 'Room goal progress', 'aria-valuemin': '0', 'aria-valuemax': String(gp.target), 'aria-valuenow': String(Math.min(gp.done, gp.target)) }, h('span', { style: `width:${pct}%` })),
+    h('div', { class: 'small muted', text: gp.done >= gp.target ? `goal met · ${gp.done} tasks` : `${gp.done} of ${gp.target} tasks` })));
+}
+
+// ---------- tasks ----------
+const isMember = (t) => (t.members || []).some(m => m && m.id === S.me.id);
+const byDue = (a, b) => (a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : a.createdAt - b.createdAt;
+const myOpenTasks = () => S.tasks.filter(t => !t.done && isMember(t)).sort(byDue);
+function dueInfo(due) {
+  if (!due) return null;
+  const t = today();
+  if (due < t) return { text: 'overdue', c: 'blush' };
+  if (due === t) return { text: 'due today', c: 'peach' };
+  if (due === addDays(t, 1)) return { text: 'due tomorrow', c: 'butter' };
+  const far = due > addDays(t, 6);
+  return { text: 'due ' + new Date(due + 'T12:00').toLocaleDateString(undefined, far ? { month: 'short', day: 'numeric' } : { weekday: 'short' }), c: null };
+}
+function taskEl(t) {
+  const member = isMember(t);
+  const members = (t.members || []).filter(Boolean);
+  const due = !t.done && dueInfo(t.due);
+  const check = h('button', {
+    type: 'button', class: 'check', role: 'checkbox', 'aria-checked': String(!!t.done), 'aria-label': (t.done ? 'Mark not done: ' : 'Mark done: ') + t.title,
+    disabled: !member, title: member ? '' : 'Join this task to check it off', onclick: () => { unlockAudio(); toggleDone(t); },
+  }, t.done ? '✓' : '');
+  const meta = h('div', { class: 'meta' },
+    tag(t.subject || 'other', subjColor(t.subject)),
+    t.stuck && !t.done ? tag('needs help', 'peach') : null,
+    due ? tag(due.text, due.c) : null,
+    t.est ? h('span', { text: '~' + (t.est >= 90 ? '1h+' : t.est + 'm') }) : null,
+    h('span', { class: 'avstack' }, members.slice(0, 4).map(m => av(m.name, m.color, 'sm'))),
+    h('span', { text: members.map(m => m.id === S.me.id ? 'you' : m.name).join(', ') }));
+  const acts = [];
+  if (!t.done && !member) acts.push(h('button', { type: 'button', class: 'btn sm', onclick: () => joinTask(t) }, t.stuck ? 'help out' : 'join'));
+  if (!t.done && member) acts.push(h('button', { type: 'button', class: 'link', onclick: () => toggleStuck(t) }, t.stuck ? 'not stuck anymore' : "i'm stuck"));
+  if (!t.done && member && t.ownerId !== S.me.id) acts.push(h('button', { type: 'button', class: 'link', onclick: () => leaveTask(t) }, 'leave'));
+  if (!t.done && (t.ownerId === S.me.id || isCreator())) acts.push(h('button', { type: 'button', class: 'link', onclick: () => removeTask(t) }, 'remove'));
+  return h('div', { class: 'task' + (t.done ? ' done' : '') }, check, h('div', { class: 'title', text: t.title }), meta, acts.length ? h('div', { class: 'meta' }, acts) : null);
+}
+function renderTasks() {
+  const open = S.tasks.filter(t => !t.done);
+  const mine = open.filter(isMember).sort(byDue);
+  const others = open.filter(t => !isMember(t)).sort((a, b) => (b.stuck ? 1 : 0) - (a.stuck ? 1 : 0) || byDue(a, b));
+  const done = S.tasks.filter(t => t.done && isToday(t.doneAt)).sort((a, b) => b.doneAt - a.doneAt);
+  const fill = (id, list, emptyText) => { const el = $(id); el.textContent = ''; if (!list.length) el.append(h('p', { class: 'empty', text: emptyText })); else list.forEach(t => el.append(taskEl(t))); };
+  fill('myTasks', mine, 'Nothing yet. Add what you’re working on.');
+  fill('groupTasks', others, 'Friends’ tasks show up here. Join one to work on it together.');
+  fill('doneTasks', done, 'Finished tasks land here.');
+  $('myCount').textContent = mine.length ? mine.length + ' open' : '';
+  $('doneCount').textContent = done.length;
+}
+async function joinTask(t) {
+  const cur = S.tasks.find(x => x.id === t.id) || t;
+  const members = (cur.members || []).filter(m => m && m.id !== S.me.id).concat([{ id: S.me.id, name: S.me.name, color: S.me.color }]);
+  try {
+    await col('tasks').doc(t.id).update({ members });
+    addEvent({ type: 'joinTask', taskId: t.id, text: cur.title, owner: cur.ownerName || '', helping: !!cur.stuck });
+    toast((cur.stuck ? 'You’re helping with "' : 'You joined "') + cur.title + '"');
+  } catch { toast("Couldn't join that task. Try again."); }
+}
+async function leaveTask(t) { const cur = S.tasks.find(x => x.id === t.id) || t; try { await col('tasks').doc(t.id).update({ members: (cur.members || []).filter(m => m && m.id !== S.me.id) }); } catch {} }
+async function removeTask(t) { try { await col('tasks').doc(t.id).delete(); } catch {} }
+async function toggleStuck(t) {
+  try {
+    await col('tasks').doc(t.id).update({ stuck: !t.stuck });
+    if (!t.stuck) addEvent({ type: 'stuck', taskId: t.id, text: t.title, subject: t.subject || 'other' });
+  } catch {}
+}
+async function toggleDone(t) {
+  const ref = col('tasks').doc(t.id);
+  try {
+    if (t.done) { await ref.update({ done: false, doneAt: null }); return; }
+    const gpBefore = goalProgress();
+    await ref.update({ done: true, doneAt: Date.now(), doneBy: S.me.id, stuck: false });
+    const crew = (t.members || []).filter(Boolean).map(m => m.name);
+    addEvent({ type: 'done', taskId: t.id, text: t.title, subject: t.subject || 'other', crew });
+    markStudyDay();
+    setTimeout(confetti, 450);
+    if (gpBefore && !gpBefore.g.reachedAt && gpBefore.done + 1 >= gpBefore.target) {
+      await roomRef().update({ goal: { reachedAt: Date.now() } });
+      addEvent({ type: 'goal', text: gpBefore.g.text, count: gpBefore.done + 1 });
+    }
+  } catch { toast("Couldn't update that task. Try again."); }
+}
+
+// ---------- feed ----------
+function renderFeed() {
+  const feed = $('feed'); const top = feed.scrollTop;
+  feed.textContent = '';
+  const evs = S.events.filter(e => !e.hidden);
+  if (!evs.length) {
+    feed.append(h('p', { class: 'empty', style: 'text-align:center;padding:24px 12px' }, 'Finished tasks, new tasks and updates show up here, newest first. Share the code ', h('b', { text: S.code || '' }), ' to bring friends in.'));
+    return;
+  }
+  let lastDay = '';
+  for (const ev of evs) {
+    const day = dayKey(ev.ts || 0);
+    if (day !== lastDay) { feed.append(h('div', { class: 'daybreak', text: day === today() ? 'today' : new Date(ev.ts).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }) })); lastDay = day; }
+    feed.append(eventEl(ev));
+  }
+  feed.scrollTop = top;
+}
+function reactBar(ev) {
+  const r = ev.reactions || {};
+  const counts = {}; let mine = null;
+  for (const [uid, emo] of Object.entries(r)) { if (!emo || !REACTS.includes(emo)) continue; counts[emo] = (counts[emo] || 0) + 1; if (uid === S.me.id) mine = emo; }
+  return h('div', { class: 'post-foot' }, REACTS.map(emo => {
+    const n = counts[emo] || 0;
+    return h('button', { type: 'button', class: 'react' + (n ? '' : ' add'), 'aria-pressed': String(mine === emo), 'aria-label': `React ${emo}`,
+      onclick: () => col('events').doc(ev.id).update({ reactions: { [S.me.id]: mine === emo ? null : emo } }).catch(() => {}) }, emo + (n ? ' ' + n : ''));
+  }));
+}
+function moreMenu(ev) {
+  const items = [];
+  if (ev.uid === S.me.id) items.push(['delete post', () => col('events').doc(ev.id).delete().catch(() => {})]);
+  else items.push(['report post', () => reportPost(ev)]);
+  if (isCreator() && ev.uid !== S.me.id) items.push(['remove post', () => col('events').doc(ev.id).update({ hidden: true }).catch(() => {})]);
+  return h('details', { class: 'more' }, h('summary', { 'aria-label': 'Post options' }, '···'),
+    h('div', { class: 'dropdown' }, items.map(([label, fn]) => h('button', { type: 'button', class: 'item', onclick: (e) => { e.currentTarget.closest('details').open = false; fn(); } }, label))));
+}
+async function reportPost(ev) {
+  try {
+    await col('reports').add({ eventId: ev.id, text: String(ev.text || '').slice(0, 200), author: ev.name || '', authorId: ev.uid || '', by: S.me.name, byId: S.me.id, ts: Date.now() });
+    toast('Reported. The room’s creator will take a look.');
+  } catch { toast("Couldn't send the report. Try again."); }
+}
+function eventEl(ev) {
+  const who = ev.uid === S.me.id ? 'you' : (ev.name || 'someone');
+  const time = h('span', { class: 'time', text: ago(ev.ts || Date.now()), title: new Date(ev.ts || 0).toLocaleString() });
+  const head = (sub, withMenu) => h('div', { class: 'post-head' }, av(ev.name, ev.color),
+    h('div', { style: 'min-width:0' }, h('div', { class: 'who', text: who }), sub ? h('div', { class: 'sub', text: sub }) : null), time, withMenu ? moreMenu(ev) : null);
+  const stamping = S.stampIds.delete(ev.id);
+  switch (ev.type) {
+    case 'msg':
+      return h('article', { class: 'post' }, head('update', true), h('div', { class: 'post-body', text: ev.text || '' }), reactBar(ev));
+    case 'done': {
+      const crew = (ev.crew || []).filter(n => n && n !== ev.name);
+      return h('article', { class: 'post' + (stamping ? ' stamping' : '') }, head(crew.length ? 'with ' + crew.join(', ') : 'finished a task', false),
+        h('div', { class: 'post-art', style: `--c: var(--${subjColor(ev.subject)})` },
+          h('div', { class: 'big', text: ev.text || '' }),
+          h('span', { class: 'stamp', 'aria-label': 'done' }, 'DONE', h('small', { text: String(ev.subject || 'other').toUpperCase() }))),
+        reactBar(ev));
+    }
+    case 'goal':
+      return h('article', { class: 'post' + (stamping ? ' stamping' : '') }, head('hit the room goal', false),
+        h('div', { class: 'post-art', style: '--c: var(--butter)' },
+          h('div', { class: 'big', text: ev.text || '' }),
+          h('span', { class: 'stamp', 'aria-label': 'goal met' }, 'GOAL', h('small', { text: (ev.count || '') + ' TASKS' }))),
+        reactBar(ev));
+    case 'stuck': {
+      const task = S.tasks.find(t => t.id === ev.taskId);
+      const canHelp = task && !task.done && task.stuck && !isMember(task);
+      return h('article', { class: 'post help' }, head('needs a hand', false),
+        h('div', { class: 'post-body' }, 'stuck on ', h('b', { text: '“' + (ev.text || '') + '”' }), ' ', tag(ev.subject || 'other', subjColor(ev.subject))),
+        h('div', { class: 'post-foot' }, canHelp ? h('button', { type: 'button', class: 'btn sm primary', onclick: () => joinTask(task) }, 'help out') : h('span', { class: 'small muted', text: task && task.done ? 'solved' : task && !task.stuck ? 'unstuck' : '' })));
+    }
+    case 'task': return note('+', [h('b', { text: who }), ' started “' + (ev.text || '') + '”'], time);
+    case 'joinTask': return note('⇄', [h('b', { text: who }), (ev.helping ? ' is helping ' : ' joined ') + (ev.owner ? ev.owner + ' on ' : '') + '“' + (ev.text || '') + '”'], time);
+    case 'join': return note('→', [h('b', { text: who }), ' walked in'], time);
+    case 'timer': return note('◷', [h('b', { text: who }), ` started a ${ev.len || 25}-minute focus`], time);
+    default: return document.createTextNode('');
+  }
+}
+function note(glyph, parts, time) { return h('div', { class: 'note-line' }, h('span', { 'aria-hidden': 'true', text: glyph }), h('span', { style: 'min-width:0;overflow-wrap:anywhere' }, ...parts), time); }
+function showStamp() {
+  if ($('v-room').dataset.tab !== 'feed' && getComputedStyle(document.querySelector('.tabs')).display !== 'none') setTab('feed');
+  requestAnimationFrame(() => { $('feed').scrollTop = 0; });
+  setTimeout(thudSound, 260);
+}
+setInterval(() => { if (S.code && !document.hidden && !document.querySelector('details.more[open]')) renderFeed(); }, 60000);
+
+// ---------- posts ----------
+function sentTimes() {
+  const local = ls.get('sg-sent-' + S.code, []).filter(t => Date.now() - t < HOUR);
+  const remote = S.myMsgTs.filter(t => Date.now() - t < HOUR);
+  return remote.length >= local.length ? remote : local;
+}
+function quietNow() { const t = S.room && S.room.timer; return !!(settings().quietFocus && t && t.phase === 'focus' && t.endsAt > Date.now()); }
+function renderQuota() {
+  if (!S.code) return;
+  const used = sentTimes();
+  const left = Math.max(0, MSG_LIMIT - used.length);
+  const quiet = quietNow();
+  const q = $('quota'); q.textContent = '';
+  for (let i = 0; i < MSG_LIMIT; i++) q.append(h('span', { class: 'pip' + (i < left ? '' : ' used') }));
+  let txt = ` ${left} left this hour`;
+  if (!left && used.length) txt = ` next post in ${Math.max(1, Math.ceil((Math.min(...used) + HOUR - Date.now()) / 60000))} min`;
+  q.append(h('span', { text: txt }));
+  const off = !left || quiet;
+  $('sendBtn').disabled = off; $('msgInput').disabled = off;
+  $('msgInput').placeholder = quiet ? 'quiet during focus. posts open at the break.' : left ? 'what are you up to?' : 'post limit reached. finished tasks still show up.';
+}
+setInterval(() => { if (S.code) renderQuota(); }, 15000);
+$('msgForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('msgInput');
+  const text = clean(input.value.trim()).slice(0, 200);
+  if (!text) return;
+  if (quietNow()) { toast('Posts are paused during focus.'); return; }
+  if (sentTimes().length >= MSG_LIMIT) { toast('You’ve used your 6 posts this hour.'); return; }
+  $('sendBtn').disabled = true;
+  try {
+    await addEvent({ type: 'msg', text });
+    const local = ls.get('sg-sent-' + S.code, []).filter(t => Date.now() - t < HOUR); local.push(Date.now()); ls.set('sg-sent-' + S.code, local);
+    input.value = '';
+  } catch { toast("Couldn't post. Try again."); }
+  renderQuota();
+});
+$('msgInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('msgForm').requestSubmit(); } });
+
+// ---------- timer ----------
+const CIRC = 282.74;
+let breakIdea = BREAK_IDEAS[0], lastPhase = '';
+function timerState() {
+  const t = (S.room && S.room.timer) || { phase: 'idle' };
+  if (t.phase === 'idle' || !t.endsAt) return { phase: 'idle', left: S.focusLen * 60000, total: S.focusLen * 60000 };
+  const total = (t.length || 25) * 60000, left = t.endsAt - Date.now();
+  if (left <= 0) return { phase: 'over', was: t.phase, left: 0, total, endsAt: t.endsAt, length: t.length };
+  return { phase: t.phase, left, total, by: t.by };
+}
+const fmt = (ms) => { const s = Math.ceil(ms / 1000); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+function renderTimer() {
+  if (!S.code) return;
+  const st = timerState();
+  $('clock').textContent = fmt(st.left);
+  const frac = st.phase === 'idle' ? 0 : st.phase === 'over' ? 1 : 1 - st.left / st.total;
+  $('ringProg').style.strokeDashoffset = String(CIRC * (1 - frac));
+  const labels = { focus: ['FOCUS', 'heads down'], break: ['BREAK', breakIdea], idle: ['ROOM TIMER', 'ready when you are'] };
+  const [p, sub] = st.phase === 'over' ? [st.was === 'focus' ? 'NICE WORK' : 'BREAK OVER', st.was === 'focus' ? 'take a break?' : 'ready for another?'] : labels[st.phase];
+  $('phaseTag').textContent = p; $('clockSub').textContent = sub;
+  $('timerNote').textContent = st.phase === 'focus' && st.by ? `Started by ${st.by}.${settings().quietFocus ? ' Posts are paused.' : ''}` : 'Everyone in the room shares this timer.';
+  $('quizBtn').hidden = !(st.phase === 'break' || (st.phase === 'over' && st.was === 'focus'));
+  if (st.phase === 'over') creditFocus(st);
+  const ph = st.phase + (st.was || '');
+  if (ph !== lastPhase) { lastPhase = ph; renderQuota(); }
+}
+function creditFocus(st) {
+  const key = 'sg-credited-' + S.code;
+  if (ls.get(key, 0) === st.endsAt) return;
+  ls.set(key, st.endsAt);
+  if (Date.now() - st.endsAt > 5 * 60000) return;
+  chime();
+  if (st.was !== 'focus') return;
+  const m = S.members[S.me.id] || {};
+  const len = st.length || 25;
+  const todayMin = ((m.focusLog || {})[today()] || 0) + len;
+  col('members').doc(S.me.id).update({ focusLog: { [today()]: todayMin }, focusTotal: (m.focusTotal || 0) + len, lastSeen: Date.now() }).catch(() => {});
+  markStudyDay();
+  toast(`Focus done. +${len} minutes`);
+}
+async function setTimer(phase, len) {
+  if (!S.code) return;
+  const timer = phase === 'idle' ? { phase: 'idle', endsAt: 0, length: S.focusLen, by: S.me.name } : { phase, endsAt: Date.now() + len * 60000, length: len, by: S.me.name };
+  if (phase === 'break') breakIdea = BREAK_IDEAS[Math.floor(Math.random() * BREAK_IDEAS.length)];
+  try { await roomRef().update({ timer }); if (phase === 'focus') addEvent({ type: 'timer', len }); }
+  catch { toast("Couldn't change the timer. Try again."); }
+}
+$('startFocus').addEventListener('click', () => { unlockAudio(); setTimer('focus', S.focusLen); });
+$('startBreak').addEventListener('click', () => { unlockAudio(); setTimer('break', 5); });
+$('stopTimer').addEventListener('click', () => setTimer('idle'));
+$('quizBtn').addEventListener('click', () => openPanel('quiz'));
+$('lenSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-len]'); if (!b) return;
+  S.focusLen = +b.dataset.len;
+  $('lenSeg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  renderTimer();
+});
+setInterval(() => { if (S.code) { renderTimer(); updatePresence(); } }, 1000);
+
+// ---------- people, stats, badges ----------
+function onlineIds() { const s = new Set([S.me.id]); for (const p of S.peers) { const u = p.presence && p.presence.uid; if (typeof u === 'string' && !(S.members[u] && S.members[u].pending)) s.add(u); } return s; }
+function peerFor(uid) { return S.peers.find(p => p.presence && p.presence.uid === uid); }
+const doneBy = (uid, pred = () => true) => S.tasks.filter(t => t.done && t.doneAt && pred(t) && (t.members || []).some(m => m && m.id === uid));
+const focusOn = (m, key) => ((m && m.focusLog) || {})[key] || 0;
+function groupStreak() {
+  const byDay = {};
+  const add = (d, u) => { (byDay[d] = byDay[d] || new Set()).add(u); };
+  for (const [uid, m] of Object.entries(S.members)) for (const [d, v] of Object.entries(m.focusLog || {})) if (v > 0) add(d, uid);
+  for (const t of S.tasks) if (t.done && t.doneAt) for (const mm of t.members || []) if (mm) add(dayKey(t.doneAt), mm.id);
+  const ok = (d) => (byDay[d] ? byDay[d].size : 0) >= 2;
+  let d = today(), n = 0;
+  if (!ok(d)) d = addDays(d, -1);
+  while (ok(d)) { n++; d = addDays(d, -1); }
+  return n;
+}
+function myStats() {
+  const m = S.members[S.me.id] || {};
+  const mine = doneBy(S.me.id);
+  return { doneTotal: mine.length, focusTotal: m.focusTotal || 0, streak: streak(), teamDone: mine.filter(t => (t.members || []).length > 1).length };
+}
+function renderSide() {
+  if (!S.code) return;
+  const m = S.members[S.me.id] || {};
+  $('stDone').textContent = doneBy(S.me.id, t => isToday(t.doneAt)).length;
+  $('stMin').textContent = focusOn(m, today());
+  $('stStreak').textContent = streak();
+  const st = myStats();
+  const br = $('badgeRow'); br.textContent = '';
+  BADGES.filter(b => b.t(st)).forEach(b => br.append(h('span', { class: 'badge', text: b.k })));
+  const next = BADGES.find(b => !b.t(st));
+  if (next) br.append(h('span', { class: 'badge locked', text: 'next: ' + next.k }));
+
+  const wrap = $('paneGroup'); wrap.textContent = '';
+  const on = onlineIds();
+  const members = activeMembers();
+  if (settings().classMode) {
+    const tasksToday = S.tasks.filter(t => t.done && isToday(t.doneAt)).length;
+    const minsToday = members.reduce((a, [, mm]) => a + focusOn(mm, today()), 0);
+    const weekKeys = Array.from({ length: 7 }, (_, i) => addDays(today(), -i));
+    const minsWeek = members.reduce((a, [, mm]) => a + weekKeys.reduce((b, k) => b + focusOn(mm, k), 0), 0);
+    wrap.append(h('p', { class: 'small muted', text: 'Class mode: showing totals only.' }),
+      h('div', { class: 'statgrid' },
+        h('div', { class: 'stat' }, h('b', { text: String(on.size) }), h('span', { text: 'here now' })),
+        h('div', { class: 'stat' }, h('b', { text: String(tasksToday) }), h('span', { text: 'tasks today' })),
+        h('div', { class: 'stat' }, h('b', { text: fmtMin(minsToday) }), h('span', { text: 'focus today' }))),
+      h('p', { class: 'small muted', style: 'text-align:center', text: `${members.length} people · ${fmtMin(minsWeek)} focused this week` }));
+    return;
+  }
+  const ids = new Set([...members.map(([id]) => id), ...on]);
+  const rows = [...ids].map(uid => {
+    const mm = uid === S.me.id ? { ...S.members[uid], name: S.me.name, color: S.me.color } : (S.members[uid] || (peerFor(uid) || {}).presence || {});
+    const peer = peerFor(uid);
+    let status = on.has(uid) ? 'here now' : (mm.lastSeen ? 'seen ' + (ago(mm.lastSeen) === 'just now' ? 'just now' : ago(mm.lastSeen) + ' ago') : 'away');
+    if (uid === S.me.id) { const t = myOpenTasks()[0]; if (t) status = 'on: ' + t.title; }
+    else if (peer && peer.presence.task) status = 'on: ' + peer.presence.task;
+    return { uid, mm, mins: focusOn(mm, today()), done: doneBy(uid, t => isToday(t.doneAt)).length, online: on.has(uid), status };
+  }).sort((a, b) => (b.online - a.online) || (b.done - a.done) || (b.mins - a.mins));
+  for (const r of rows.slice(0, 40)) {
+    const a = av(r.mm.name, r.mm.color); if (r.online) a.append(h('span', { class: 'dot', title: 'here now' }));
+    wrap.append(h('div', { class: 'person' }, a,
+      h('div', { style: 'min-width:0' }, h('div', { text: (r.mm.name || 'someone') + (r.uid === S.me.id ? ' (you)' : '') + (S.room && r.uid === S.room.createdBy ? ' · host' : '') }), h('div', { class: 'status', text: String(r.status).slice(0, 70) })),
+      h('div', { class: 'score' }, h('div', { text: r.done + ' done' }), h('div', { text: r.mins + ' min' }))));
+  }
+}
+$('sideSeg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-pane]'); if (!b) return;
+  S.sidePane = b.dataset.pane;
+  $('sideSeg').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  $('paneYou').hidden = S.sidePane !== 'you'; $('paneGroup').hidden = S.sidePane !== 'group';
+});
+function markStudyDay() { const d = ls.get('sg-days', []); if (!d.includes(today())) { d.push(today()); ls.set('sg-days', d.slice(-120)); } renderSide(); }
+function streak() {
+  const d = new Set(ls.get('sg-days', []));
+  let k = today(), n = 0;
+  if (!d.has(k)) k = addDays(k, -1);
+  while (d.has(k)) { n++; k = addDays(k, -1); }
+  return n;
+}
+function renderAll() { renderHeader(); renderGoal(); renderTasks(); renderFeed(); renderTimer(); renderSide(); renderQuota(); }
+function setTab(tab) {
+  $('v-room').dataset.tab = tab;
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === tab)));
+}
+document.querySelector('.tabs').addEventListener('click', (e) => { const b = e.target.closest('button[data-tab]'); if (b) setTab(b.dataset.tab); });
+
+// ---------- panels ----------
+let panelKind = null, lastFocus = null;
+function openPanel(kind) {
+  panelKind = kind; lastFocus = document.activeElement;
+  $('panel').hidden = false; $('scrim').hidden = false;
+  buildPanel(true);
+}
+function closePanel() {
+  const wasOpen = !$('panel').hidden;
+  panelKind = null; $('panel').hidden = true; $('scrim').hidden = true;
+  if (wasOpen && lastFocus && lastFocus.focus) try { lastFocus.focus(); } catch {}
+}
+function refreshPanel() { if (panelKind === 'settings' || panelKind === 'info') buildPanel(false); }
+$('closePanel').addEventListener('click', closePanel);
+$('scrim').addEventListener('click', closePanel);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (!$('panel').hidden) closePanel(); closeDrops(); } });
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) openPanel(b.dataset.open); });
+$('addTaskBtn').addEventListener('click', () => openPanel('task'));
+
+function buildPanel(first) {
+  const body = $('panelBody');
+  const active = document.activeElement && body.contains(document.activeElement) ? document.activeElement.id : null;
+  const keepScroll = $('panel').scrollTop;
+  body.textContent = '';
+  const builders = { task: panelTask, settings: panelSettings, info: panelInfo, recap: panelRecap, cards: panelCards, quiz: panelQuiz, privacy: panelPrivacy };
+  const [title, node] = (builders[panelKind] || panelPrivacy)();
+  $('panelTitle').textContent = title;
+  body.append(node);
+  if (first) { $('panel').scrollTop = 0; const f = body.querySelector('input, textarea, button'); if (f) setTimeout(() => f.focus(), 30); }
+  else { $('panel').scrollTop = keepScroll; if (active && $(active)) $(active).focus(); }
+}
+
+let pick = { subj: 'math', est: 25, due: '' };
+function panelTask() {
+  const wrap = h('form', { class: 'stack', style: 'gap:18px', autocomplete: 'off' });
+  const title = h('input', { class: 'field', id: 'taskTitle', maxlength: '80', placeholder: 'finish algebra worksheet #4', required: true });
+  const pickers = (items, cur, set) => h('div', { class: 'pickers' }, items.map(([v, label, c]) => h('button', { type: 'button', class: 'pick', style: c ? `--c: var(--${c})` : null, 'aria-pressed': String(cur === v), onclick: (e) => { set(v); e.currentTarget.parentElement.querySelectorAll('.pick').forEach(p => p.setAttribute('aria-pressed', String(p === e.currentTarget))); } }, label)));
+  const dateInput = h('input', { type: 'date', class: 'field', id: 'taskDue', min: today(), value: pick.due || '', style: 'max-width:200px' });
+  const duePickers = pickers([['', 'no date'], [today(), 'today'], [addDays(today(), 1), 'tomorrow']], pick.due, (v) => { pick.due = v; dateInput.value = v; });
+  dateInput.addEventListener('change', () => { pick.due = dateInput.value; duePickers.querySelectorAll('.pick').forEach(p => p.setAttribute('aria-pressed', 'false')); });
+  wrap.append(
+    h('div', { class: 'stack' }, h('label', { class: 'label', for: 'taskTitle', text: 'what are you working on?' }), title),
+    h('div', { class: 'stack' }, h('span', { class: 'label', text: 'subject' }), pickers(SUBJECTS.map(s => [s.k, s.k, s.c]), pick.subj, (v) => pick.subj = v)),
+    h('div', { class: 'stack' }, h('span', { class: 'label', text: 'how long, roughly?' }), pickers(ESTS.map(m => [m, m >= 90 ? '1h+' : m + ' min']), pick.est, (v) => pick.est = v)),
+    h('div', { class: 'stack' }, h('label', { class: 'label', for: 'taskDue', text: 'due' }), duePickers, dateInput),
+    h('div', {}, h('button', { class: 'btn primary', type: 'submit' }, 'add to my list')),
+    h('p', { class: 'small muted', text: 'Your task shows up for everyone in the room. Friends can join it and finish it with you.' }));
+  wrap.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const t = clean(title.value.trim()).slice(0, 80);
+    if (!t || !S.code) return;
+    try {
+      const ref = await col('tasks').add({ title: t, subject: pick.subj, est: pick.est, due: pick.due || null, stuck: false, ownerId: S.me.id, ownerName: S.me.name,
+        members: [{ id: S.me.id, name: S.me.name, color: S.me.color }], done: false, doneAt: null, createdAt: Date.now() });
+      addEvent({ type: 'task', taskId: ref.id, text: t, subject: pick.subj });
+      pick.due = ''; closePanel();
+    } catch (err) { toast(err && err.code === 'quota_exceeded' ? 'This room is full of tasks. Remove some old ones first.' : "Couldn't add that task. Try again."); }
+  });
+  return ['new task', wrap];
+}
+
+let deleteArmed = false;
+function panelSettings() {
+  if (!isCreator()) return panelInfo();
+  const st = settings();
+  const wrap = h('div', { class: 'stack', style: 'gap:18px' });
+  const setSetting = (k, v) => roomRef().update({ settings: { [k]: v } }).catch(() => toast("Couldn't save that setting."));
+
+  const nameIn = h('input', { class: 'field', id: 'setName', maxlength: '32', value: (S.room && S.room.name) || '' });
+  wrap.append(h('div', { class: 'stack' }, h('label', { class: 'label', for: 'setName', text: 'room name' }),
+    h('div', { class: 'row', style: 'flex-wrap:nowrap' }, nameIn, h('button', { type: 'button', class: 'btn sm', onclick: () => { const n = clean(nameIn.value.trim()).slice(0, 32); if (n) roomRef().update({ name: n }).then(() => toast('Saved')).catch(() => {}); } }, 'save'))));
+
+  const g = (S.room && S.room.goal) || {};
+  const gText = h('input', { class: 'field', id: 'goalText', maxlength: '80', placeholder: 'Bio test Friday: finish chapters 4–6', value: g.text || '' });
+  const gTarget = h('input', { class: 'field', id: 'goalTarget', type: 'number', min: '1', max: '200', value: String(g.target || 10), style: 'max-width:100px' });
+  const gDue = h('input', { class: 'field', id: 'goalDue', type: 'date', value: g.due || '', style: 'max-width:180px' });
+  wrap.append(h('div', { class: 'group' }, h('h3', { text: 'room goal' }),
+    h('label', { class: 'label', for: 'goalText', text: 'what is the group working toward?' }), gText,
+    h('div', { class: 'row' }, h('div', { class: 'stack', style: 'gap:4px' }, h('label', { class: 'label', for: 'goalTarget', text: 'tasks to finish' }), gTarget),
+      h('div', { class: 'stack', style: 'gap:4px' }, h('label', { class: 'label', for: 'goalDue', text: 'by (optional)' }), gDue)),
+    h('div', { class: 'row' },
+      h('button', { type: 'button', class: 'btn sm primary', onclick: async () => {
+        const text = clean(gText.value.trim()).slice(0, 80); if (!text) { gText.focus(); return; }
+        const target = Math.max(1, Math.min(200, parseInt(gTarget.value, 10) || 10));
+        const same = g.text === text && g.setAt;
+        try { await roomRef().update({ goal: { text, target, due: gDue.value || null, setAt: same ? g.setAt : Date.now(), reachedAt: same ? (g.reachedAt || null) : null } }); toast('Goal saved'); } catch { toast("Couldn't save the goal."); }
+      } }, g.text ? 'update goal' : 'set goal'),
+      g.text ? h('button', { type: 'button', class: 'link', onclick: () => roomRef().update({ goal: null }).catch(() => {}) }, 'clear goal') : null),
+    h('p', { class: 'small muted', text: 'Every task anyone finishes after you set the goal counts toward it.' })));
+
+  wrap.append(h('div', { class: 'group' }, h('h3', { text: 'room rules' }),
+    sw('lock the room', 'No new people can join. People already in can come back.', st.locked, (v) => setSetting('locked', v)),
+    sw('approve new people', 'New people wait until you let them in.', st.approval, (v) => setSetting('approval', v)),
+    sw('quiet focus', 'Posts pause while the focus timer runs. Finished tasks still show.', st.quietFocus, (v) => setSetting('quietFocus', v)),
+    sw('class mode', 'The group view shows class totals instead of each person.', st.classMode, (v) => setSetting('classMode', v))));
+
+  const pending = Object.entries(S.members).filter(([, m]) => m.pending);
+  const reqs = h('div', { class: 'group' }, h('h3', { text: 'waiting to join' + (pending.length ? ` (${pending.length})` : '') }));
+  if (!pending.length) reqs.append(h('p', { class: 'empty', text: st.approval ? 'Nobody is waiting.' : 'Turn on "approve new people" to screen who joins.' }));
+  for (const [uid, m] of pending) reqs.append(h('div', { class: 'listrow' }, h('span', { class: 'row', style: 'gap:8px' }, av(m.name, m.color, 'sm'), h('span', { text: m.name || 'someone' })),
+    h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' },
+      h('button', { type: 'button', class: 'btn sm primary', onclick: () => col('members').doc(uid).update({ pending: false }).catch(() => {}) }, 'let in'),
+      h('button', { type: 'button', class: 'btn sm', onclick: () => col('members').doc(uid).delete().catch(() => {}) }, 'deny'))));
+  wrap.append(reqs);
+
+  const reps = h('div', { class: 'group' }, h('h3', { text: 'reports' + (S.reports.length ? ` (${S.reports.length})` : '') }));
+  if (!S.reports.length) reps.append(h('p', { class: 'empty', text: 'No reported posts.' }));
+  for (const r of S.reports) reps.append(h('div', { class: 'stack', style: 'gap:6px;padding:8px 0;border-bottom:1px solid var(--line)' },
+    h('div', { class: 'small muted', text: `${r.by || 'someone'} reported a post by ${r.author || 'someone'}` }),
+    h('div', { text: '“' + (r.text || '') + '”' }),
+    h('div', { class: 'row', style: 'gap:6px' },
+      h('button', { type: 'button', class: 'btn sm primary', onclick: async () => { try { await col('events').doc(r.eventId).update({ hidden: true }); } catch {} col('reports').doc(r.id).delete().catch(() => {}); } }, 'remove post'),
+      r.authorId && r.authorId !== S.me.id ? h('button', { type: 'button', class: 'btn sm danger', onclick: () => kick(r.authorId, r.author) }, 'remove person') : null,
+      h('button', { type: 'button', class: 'btn sm ghost', onclick: () => col('reports').doc(r.id).delete().catch(() => {}) }, 'dismiss'))));
+  wrap.append(reps);
+
+  const ppl = h('div', { class: 'group' }, h('h3', { text: 'people' }));
+  for (const [uid, m] of activeMembers()) {
+    if (uid === S.me.id) continue;
+    ppl.append(h('div', { class: 'listrow' }, h('span', { class: 'row', style: 'gap:8px' }, av(m.name, m.color, 'sm'), h('span', { text: m.name || 'someone' })),
+      h('button', { type: 'button', class: 'btn sm danger', onclick: () => kick(uid, m.name) }, 'remove')));
+  }
+  if (activeMembers().filter(([id]) => id !== S.me.id).length === 0) ppl.append(h('p', { class: 'empty', text: 'Nobody else has joined yet.' }));
+  ppl.append(h('p', { class: 'small muted', text: 'Removed people can’t rejoin with this code.' }));
+  wrap.append(ppl);
+
+  const delBtn = h('button', { type: 'button', class: 'btn sm danger', id: 'delRoom', onclick: async (e) => {
+    const b = e.currentTarget;
+    if (!deleteArmed) { deleteArmed = true; b.textContent = 'click again to delete for everyone'; setTimeout(() => { deleteArmed = false; if (b.isConnected && !b.disabled) b.textContent = 'delete this room'; }, 5000); return; }
+    deleteArmed = false; b.disabled = true; b.textContent = 'deleting…';
+    await deleteRoom();
+  } }, 'delete this room');
+  wrap.append(h('div', { class: 'group' }, h('h3', { text: 'delete room' }), h('p', { class: 'small muted', text: 'Removes the feed, tasks and everyone’s stats for this room. This can’t be undone.' }), h('div', {}, delBtn)));
+  return ['room settings', wrap];
+}
+async function kick(uid, name) {
+  try {
+    const banned = Array.from(new Set([...(S.room.banned || []), uid]));
+    await roomRef().update({ banned });
+    await col('members').doc(uid).delete();
+    toast(`${name || 'They'} can’t rejoin this room.`);
+  } catch { toast("Couldn't remove them. Try again."); }
+}
+async function deleteRoom() {
+  const code = S.code;
+  try {
+    for (const c of ['events', 'tasks', 'members', 'reports']) {
+      for (let i = 0; i < 30; i++) {
+        const snap = await S.db.collection(`rooms/${code}/${c}`).limit(200).get();
+        if (snap.empty) break;
+        for (const d of snap.docs) await S.db.doc(`rooms/${code}/${c}/${d.id}`).delete();
+      }
+    }
+    await S.db.doc('rooms/' + code).delete();
+    ls.set('sg-recent', ls.get('sg-recent', []).filter(r => r.code !== code));
+    leaveRoom(false); toast('Room deleted.');
+  } catch { toast("Couldn't finish deleting. Try again."); buildPanel(false); }
+}
+function panelInfo() {
+  const st = settings();
+  const rules = [st.locked && 'locked to new people', st.approval && 'new people need approval', st.quietFocus && 'quiet during focus', st.classMode && 'class mode'].filter(Boolean);
+  return ['room info', h('div', { class: 'prose' },
+    h('p', {}, 'Hosted by ', h('b', { text: (S.room && S.room.creatorName) || 'the creator' }), '. Code ', h('b', { text: S.code || '' }), '.'),
+    h('p', { class: 'muted', text: rules.length ? 'Room rules: ' + rules.join(', ') + '.' : 'No extra room rules are on.' }),
+    h('p', { class: 'muted', text: 'See something that isn’t okay? Use the ··· on a post to report it to the host.' }))];
+}
+
+function panelRecap() {
+  const m = S.members[S.me.id] || {};
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today(), i - 6));
+  const rows = days.map(k => ({ k, mins: focusOn(m, k), done: doneBy(S.me.id, t => dayKey(t.doneAt) === k).length }));
+  const totalMin = rows.reduce((a, r) => a + r.mins, 0), totalDone = rows.reduce((a, r) => a + r.done, 0);
+  const score = (r) => r.mins + r.done * 20;
+  const best = rows.reduce((a, r) => score(r) > score(a) ? r : a, rows[0]);
+  const max = Math.max(1, ...rows.map(r => r.mins));
+  const dayName = (k) => new Date(k + 'T12:00').toLocaleDateString(undefined, { weekday: 'short' });
+  const earned = BADGES.filter(b => b.t(myStats()));
+  const text = `My week on Study Group: ${totalDone} tasks done, ${fmtMin(totalMin)} focused${score(best) > 0 ? ', best day ' + dayName(best.k) : ''}. ${streak()}-day streak.`;
+  return ['your week', h('div', { class: 'stack', style: 'gap:20px' },
+    h('p', { class: 'muted small', text: `Last 7 days in ${(S.room && S.room.name) || 'this room'}. Only you see this.` }),
+    h('div', { class: 'statgrid' },
+      h('div', { class: 'stat' }, h('b', { text: String(totalDone) }), h('span', { text: 'tasks done' })),
+      h('div', { class: 'stat' }, h('b', { text: fmtMin(totalMin) }), h('span', { text: 'focused' })),
+      h('div', { class: 'stat' }, h('b', { text: score(best) > 0 ? dayName(best.k) : '–' }), h('span', { text: 'best day' }))),
+    h('div', { class: 'stack', style: 'gap:6px' }, h('span', { class: 'label', text: 'FOCUS MINUTES · ✓ TASKS DONE' }),
+      h('div', { class: 'bars', role: 'img', 'aria-label': rows.map(r => `${dayName(r.k)}: ${r.mins} minutes, ${r.done} tasks`).join('; ') },
+        rows.map(r => h('div', { class: 'b' }, h('span', { text: r.done ? '✓' + r.done : '' }), h('div', { class: 'fill', style: `height:${Math.round(r.mins / max * 90)}px` }), h('span', { text: dayName(r.k).slice(0, 2) }))))),
+    h('div', { class: 'stack' }, h('span', { class: 'label', text: 'BADGES' }), h('div', { class: 'badges' }, earned.length ? earned.map(b => h('span', { class: 'badge', text: b.k })) : h('span', { class: 'empty', text: 'Finish a task to earn your first one.' }))),
+    h('div', {}, h('button', { type: 'button', class: 'btn primary', onclick: () => copyText(text, 'Recap copied') }, 'copy recap to share')))];
+}
+
+async function saveCards() {
+  ls.set('sg-cards', S.cards);
+  if (S.db && S.realId) { try { await S.db.doc('data/users/' + S.realId + '/flashcards').set({ cards: S.cards }); } catch {} }
+}
+function panelCards() {
+  const q = h('input', { class: 'field', id: 'cardQ', maxlength: '140', placeholder: 'mitochondria' });
+  const a = h('input', { class: 'field', id: 'cardA', maxlength: '200', placeholder: 'makes energy for the cell' });
+  const form = h('form', { class: 'stack', autocomplete: 'off' },
+    h('label', { class: 'label', for: 'cardQ', text: 'front' }), q, h('label', { class: 'label', for: 'cardA', text: 'back' }), a,
+    h('div', { class: 'row' }, h('button', { class: 'btn primary', type: 'submit' }, 'add card'), S.cards.length ? h('button', { type: 'button', class: 'btn', onclick: () => openPanel('quiz') }, 'quiz me') : null));
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fq = q.value.trim(), fa = a.value.trim(); if (!fq || !fa) return;
+    S.cards = [{ q: fq.slice(0, 140), a: fa.slice(0, 200) }, ...S.cards].slice(0, 200);
+    saveCards(); buildPanel(true);
+  });
+  const list = h('div', {});
+  S.cards.forEach((c, i) => list.append(h('div', { class: 'listrow' }, h('span', {}, h('b', { text: c.q }), h('span', { class: 'muted', text: ' · ' + c.a })),
+    h('button', { type: 'button', class: 'link', onclick: () => { S.cards.splice(i, 1); saveCards(); buildPanel(false); } }, 'delete'))));
+  return ['flashcards', h('div', { class: 'stack', style: 'gap:20px' },
+    h('p', { class: 'small muted', text: 'Private to you. Quiz yourself on 5 cards during timer breaks.' }), form,
+    h('div', { class: 'group' }, h('h3', { text: `your cards (${S.cards.length})` }), S.cards.length ? list : h('p', { class: 'empty', text: 'No cards yet.' })))];
+}
+let quiz = null;
+function panelQuiz() {
+  if (!S.cards.length) return ['quiz', h('div', { class: 'stack' }, h('p', { class: 'muted', text: 'Add a few flashcards first, then quiz yourself during breaks.' }), h('div', {}, h('button', { type: 'button', class: 'btn primary', onclick: () => openPanel('cards') }, 'add flashcards')))];
+  if (!quiz || quiz.done) quiz = { deck: [...S.cards].sort(() => Math.random() - .5).slice(0, 5), i: 0, flipped: false, got: 0, done: false };
+  const wrap = h('div', { class: 'stack', style: 'gap:16px' });
+  const draw = () => {
+    wrap.textContent = '';
+    if (quiz.i >= quiz.deck.length) {
+      quiz.done = true;
+      wrap.append(h('div', { class: 'flash' }, h('div', { class: 'q', text: `${quiz.got} of ${quiz.deck.length}` }), h('div', { class: 'muted', text: quiz.got === quiz.deck.length ? 'perfect round.' : 'nice. the ones you missed will come back.' })),
+        h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn primary', onclick: () => { quiz = null; buildPanel(true); } }, 'another round'), h('button', { type: 'button', class: 'btn', onclick: closePanel }, 'done')));
+    } else {
+      const c = quiz.deck[quiz.i];
+      wrap.append(h('span', { class: 'label', text: `CARD ${quiz.i + 1} OF ${quiz.deck.length}` }),
+        h('div', { class: 'flash' }, h('div', { class: 'q', text: c.q }), quiz.flipped ? h('div', { class: 'a', text: c.a }) : null),
+        quiz.flipped
+          ? h('div', { class: 'row' }, h('button', { type: 'button', class: 'btn primary', onclick: () => { quiz.got++; quiz.i++; quiz.flipped = false; draw(); } }, 'got it'), h('button', { type: 'button', class: 'btn', onclick: () => { quiz.i++; quiz.flipped = false; draw(); } }, 'not yet'))
+          : h('div', {}, h('button', { type: 'button', class: 'btn primary', onclick: () => { quiz.flipped = true; draw(); } }, 'show answer')));
+    }
+    const f = wrap.querySelector('button'); if (f) setTimeout(() => f.focus(), 20);
+  };
+  draw();
+  return ['quiz yourself', wrap];
+}
+
+function panelPrivacy() {
+  return ['privacy & safety', h('div', { class: 'prose' },
+    h('h3', { text: 'what Study Group keeps' }),
+    h('p', { text: 'The nickname and color you pick, the tasks you add, your posts and reactions, and your focus minutes in each room. No email, phone number, birthday or location is asked for.' }),
+    h('h3', { text: 'who can see it' }),
+    h('p', { text: 'Everyone in a room can see that room’s feed, tasks and the group list. Your weekly recap and flashcards are only shown to you.' }),
+    h('h3', { text: 'how long it stays' }),
+    h('p', { text: 'Feed posts older than 14 days are cleared out. A room’s creator can delete the whole room at any time, which removes its feed, tasks and stats.' }),
+    h('h3', { text: 'staying safe' }),
+    h('p', { text: 'Study Group is for students 13 and up. Use a nickname, and don’t post your full name, school, address, phone number or social media. Only share room codes with people you know.' }),
+    h('p', { text: 'If someone posts something that isn’t okay, tap ··· on the post and choose "report post". The room’s creator can remove posts and people. If anything makes you feel unsafe, leave the room and tell a parent, teacher or trusted adult.' }),
+    h('h3', { text: 'for parents and teachers' }),
+    h('p', { text: 'Rooms are private by code. Creators can lock a room, approve each new person, pause posts during focus time, and switch on class mode, which shows totals instead of individual stats. Posts are limited to 6 per hour per person.' }))];
+}
+
+// ---------- sound ----------
+let actx = null, snd = { bus: null, nodes: [], timers: [], kind: 'off' };
+function unlockAudio() { try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch {} }
+function renderSoundPick() {
+  const p = $('soundPick'); p.textContent = '';
+  for (const [k, label] of SOUNDS) p.append(h('button', { type: 'button', class: 'pick', 'aria-pressed': String(snd.kind === k), onclick: (e) => { e.stopPropagation(); setSound(k); renderSoundPick(); } }, label));
+}
+function stopSound() {
+  snd.timers.forEach(clearInterval); snd.nodes.forEach(n => { try { n.stop(); } catch {} });
+  if (snd.bus) try { snd.bus.disconnect(); } catch {}
+  snd = { bus: null, nodes: [], timers: [], kind: 'off' };
+}
+function noise(kind) {
+  const len = actx.sampleRate * 4, buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; if (kind === 'brown') { last = (last + .02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w * .5; }
+  const src = actx.createBufferSource(); src.buffer = buf; src.loop = true; src.start(); snd.nodes.push(src); return src;
+}
+function filt(type, f, q) { const n = actx.createBiquadFilter(); n.type = type; n.frequency.value = f; n.Q.value = q || .7; return n; }
+function ping(dest, freq, gain, dur, when = 0) {
+  const t = actx.currentTime + when, o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(dest);
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(gain, t + .02); g.gain.exponentialRampToValueAtTime(.0005, t + dur);
+  o.start(t); o.stop(t + dur + .05);
+}
+function setSound(kind) {
+  unlockAudio(); stopSound();
+  if (kind === 'off' || !actx) return;
+  snd.kind = kind;
+  const bus = snd.bus = actx.createGain(); bus.gain.value = $('vol').value / 100 * .6; bus.connect(actx.destination);
+  if (kind === 'brown') noise('brown').connect(filt('lowpass', 900)).connect(bus);
+  if (kind === 'rain') noise('white').connect(filt('bandpass', 1400, .6)).connect(bus);
+  if (kind === 'cafe') {
+    noise('brown').connect(filt('bandpass', 450, .5)).connect(bus);
+    snd.timers.push(setInterval(() => { if (Math.random() < .45) ping(bus, 2200 + Math.random() * 1600, .04, .5); }, 1300));
+  }
+  if (kind === 'lofi') {
+    const chords = [[261.63, 329.63, 392, 493.88], [220, 261.63, 329.63, 392], [174.61, 220, 261.63, 329.63], [196, 246.94, 293.66, 349.23]];
+    const crackle = actx.createGain(); crackle.gain.value = .05;
+    noise('white').connect(filt('highpass', 3000)).connect(crackle).connect(bus);
+    const lp = filt('lowpass', 1100); lp.connect(bus);
+    let i = 0;
+    const play = () => {
+      const t = actx.currentTime, c = chords[i++ % 4];
+      c.forEach((f, j) => { const o = actx.createOscillator(), g = actx.createGain(); o.type = 'triangle'; o.frequency.value = f; o.connect(g); g.connect(lp);
+        g.gain.setValueAtTime(0, t + j * .03); g.gain.linearRampToValueAtTime(.07, t + .25); g.gain.linearRampToValueAtTime(0, t + 2.35); o.start(t); o.stop(t + 2.4); });
+      const b = actx.createOscillator(), bg = actx.createGain(); b.type = 'sine'; b.frequency.value = c[0] / 2; b.connect(bg); bg.connect(bus);
+      bg.gain.setValueAtTime(.12, t); bg.gain.exponentialRampToValueAtTime(.001, t + 1.2); b.start(t); b.stop(t + 1.3);
+    };
+    play(); snd.timers.push(setInterval(play, 2400));
+  }
+}
+$('vol').addEventListener('input', () => { if (snd.bus) snd.bus.gain.value = $('vol').value / 100 * .6; });
+function chime() { if (!actx) return; try { ping(actx.destination, 659.25, .15, .9); ping(actx.destination, 880, .15, .9, .18); } catch {} }
+function thudSound() {
+  if (!actx || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  try {
+    const len = Math.floor(actx.sampleRate * .12), buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const src = actx.createBufferSource(), g = actx.createGain(); src.buffer = buf; g.gain.value = .9;
+    src.connect(filt('lowpass', 420)).connect(g).connect(actx.destination); src.start();
+  } catch {}
+}
+
+// ---------- confetti ----------
+function confetti() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const cv = $('confetti'); cv.hidden = false;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  const cs = getComputedStyle(document.documentElement);
+  const cols = COLORS.map(c => cs.getPropertyValue('--' + c).trim()).concat([cs.getPropertyValue('--ink').trim()]);
+  const ps = Array.from({ length: 70 }, () => ({ x: innerWidth / 2, y: innerHeight * .55, vx: (Math.random() - .5) * 10, vy: -Math.random() * 11 - 4, r: Math.random() * 6 + 3, c: cols[Math.floor(Math.random() * cols.length)], a: Math.random() * 6 }));
+  const t0 = performance.now();
+  (function frame(t) {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    for (const p of ps) { p.x += p.vx; p.y += p.vy; p.vy += .35; p.a += .2; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); }
+    if (t - t0 < 1500) requestAnimationFrame(frame); else { ctx.clearRect(0, 0, innerWidth, innerHeight); cv.hidden = true; }
+  })(t0);
+}
+
+// ---------- boot ----------
+if (S.me.name && ls.get('sg-age', false)) goLobby(true); else show('v-name');
+})();
+</script>
+
+</body>
+</html>

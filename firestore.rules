@@ -1,0 +1,77 @@
+rules_version = '2';
+// Security rules for Study Group. Paste into Firebase console → Firestore Database → Rules, then Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function roomData(code) { return get(/databases/$(database)/documents/rooms/$(code)).data; }
+    function isHost(code) { return roomData(code).createdBy == request.auth.uid; }
+    function notBanned(code) { return !(request.auth.uid in roomData(code).get('banned', [])); }
+    function roomSetting(code, key) { return roomData(code).get('settings', {}).get(key, false); }
+    function memberPath(code) { return /databases/$(database)/documents/rooms/$(code)/members/$(request.auth.uid); }
+    function isMember(code) { return exists(memberPath(code)) && get(memberPath(code)).data.get('pending', false) == false; }
+
+    match /rooms/{code} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      // The host can change anything. Everyone else can only move the shared timer and mark the goal reached.
+      allow update: if signedIn() && (
+        resource.data.createdBy == request.auth.uid ||
+        (!(request.auth.uid in resource.data.get('banned', [])) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['timer', 'goal']))
+      );
+      allow delete: if signedIn() && resource.data.createdBy == request.auth.uid;
+
+      match /members/{uid} {
+        allow read: if signedIn();
+        allow create: if signedIn() && uid == request.auth.uid && notBanned(code) && (
+          isHost(code) || (
+            roomSetting(code, 'locked') != true &&
+            (roomSetting(code, 'approval') != true || request.resource.data.get('pending', false) == true)
+          )
+        );
+        allow update: if signedIn() && (
+          isHost(code) || (
+            uid == request.auth.uid && notBanned(code) &&
+            (resource.data.get('pending', false) == false || request.resource.data.get('pending', false) == true || roomSetting(code, 'approval') != true)
+          )
+        );
+        allow delete: if signedIn() && (uid == request.auth.uid || isHost(code));
+      }
+
+      match /events/{id} {
+        allow read: if signedIn();
+        allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+          && isMember(code) && notBanned(code)
+          && request.resource.data.get('text', '').size() <= 200;
+        allow update: if signedIn() && notBanned(code) && (
+          isHost(code) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reactions'])
+        );
+        allow delete: if signedIn() && (resource.data.uid == request.auth.uid || isHost(code));
+      }
+
+      match /tasks/{id} {
+        allow read: if signedIn();
+        allow create: if signedIn() && isMember(code) && notBanned(code)
+          && request.resource.data.ownerId == request.auth.uid
+          && request.resource.data.title.size() <= 80;
+        allow update: if signedIn() && isMember(code) && notBanned(code);
+        allow delete: if signedIn() && (resource.data.ownerId == request.auth.uid || isHost(code));
+      }
+
+      match /reports/{id} {
+        allow create: if signedIn() && request.resource.data.byId == request.auth.uid;
+        allow read, delete: if signedIn() && isHost(code);
+      }
+
+      match /presence/{uid} {
+        allow read: if signedIn();
+        allow write: if signedIn() && uid == request.auth.uid;
+      }
+    }
+
+    // Private per-person data (flashcards).
+    match /data/users/{uid}/{rest=**} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}
